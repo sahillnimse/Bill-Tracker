@@ -1,0 +1,23 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+pydantic==2.10.5
+
+# AWS
+boto3==1.35.97
+
+# RunPod
+httpx==0.28.1
+
+# Google Analytics 4
+google-analytics-data==0.18.16
+google-auth==2.38.0
+
+# Google Ads
+google-ads==26.1.0
+
+# Google Workspace (Admin SDK Reports API)
+google-api-python-client==2.163.0
+
+# Microsoft 365 + Outlook (Graph)
+msal==1.31.1

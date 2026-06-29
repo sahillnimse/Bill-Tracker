@@ -1,0 +1,52 @@
+# ── Credentials & Secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+backend/secrets/
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!vite.config.json
+!.oxlintrc.json
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# ── Database / Cache ──────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+*.local
+
+# ── OS & Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
