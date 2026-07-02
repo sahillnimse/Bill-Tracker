@@ -165,12 +165,13 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
 
 
 def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
-    fetch_fn = PROVIDERS[provider_key]
     try:
-        if provider_key in DAYS_AWARE_PROVIDERS:
-            data = fetch_fn(days=days)
+        if provider_key == "aws":
+            data = aws_provider.fetch_aws_data(days=days)
+        elif provider_key == "gworkspace":
+            data = gworkspace_provider.fetch_gworkspace_data(days=days)
         else:
-            data = fetch_fn()
+            data = PROVIDERS[provider_key]()
         data["_status"] = "ok"
     except Exception as exc:
         logger.exception("Failed to fetch %s", provider_key)
