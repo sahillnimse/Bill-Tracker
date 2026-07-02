@@ -29,6 +29,10 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    // Auto sync on mount and when days change
+    onSync();
+  }, [onSync, days]);
   return (
     <div className="topbar">
       <div style={{ display: "flex", gap: 3, alignItems: "center" }} />
@@ -94,10 +98,6 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }
             </div>
           )}
         </div>
-
-        <button className="sync-btn" onClick={onSync} disabled={syncing}>
-          {syncing ? "Syncing…" : "Sync now"}
-        </button>
       </div>
     </div>
   );

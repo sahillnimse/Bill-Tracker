@@ -2,13 +2,20 @@ import KpiCard from "../components/KpiCard";
 import DailyBarChart from "../components/DailyBarChart";
 import BreakdownPanel from "../components/BreakdownPanel";
 import AnomalyHistory from "../components/AnomalyHistory";
+import Ec2InstancesPanel from "../components/Ec2InstancesPanel";
+import ServiceUsagePanel from "../components/ServiceUsagePanel";
 import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import SmaTrendCard from "../components/SmaTrendCard";
+import BudgetProgressBar from "../components/BudgetProgressBar";
+import MonthlyForecastCard from "../components/MonthlyForecastCard";
+import SpikeAlert from "../components/SpikeAlert";
 import { useCurrency } from "../context/CurrencyContext";
+import ExportButton from "../components/ExportButton";
 
-export default function AwsPage() {
-  const { data, loading, error } = useProvider("aws");
+export default function AwsPage({ days = 30 }) {
+  const { data, loading, error } = useProvider("aws", days);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -30,6 +37,18 @@ export default function AwsPage() {
         <div className="ph-sub">UnblendedCost · daily granularity · {data.region}</div>
       </div>
 
+      {data._error && (
+        <div className="a-banner">
+          <div className="a-icon">!</div>
+          <div>
+            <div className="a-title">API Connection Error</div>
+            <div className="a-text">
+              Failed to load live data for this provider: {data._error}. Please check credentials or API access.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-grid">
         <KpiCard accent="aws" label="Today" value={fmt(data.today)} valueColor="var(--aws)"
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null} deltaClass={deltaClass} />
@@ -37,6 +56,7 @@ export default function AwsPage() {
         <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} />
         <KpiCard accent="aws" label="30-day avg/day" value={fmt(data.avg_per_day_30d)} />
       </div>
+        <ExportButton data={data} filename="aws_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="aws">
@@ -59,9 +79,9 @@ export default function AwsPage() {
       </div>
 
       <div className="two-col">
-        <div className="panel">
+        <div className="panel panel--chart">
           <div className="panel-hdr">
-            <div className="panel-title">Daily spend · 30 days</div>
+            <div className="panel-title">Daily spend · {days} days</div>
             <div className="panel-stat" style={{ color: "var(--aws)" }}>avg {fmt(data.avg_per_day_30d)}/day</div>
           </div>
           <DailyBarChart series={data.daily_series} color="#f97316" highlightLast={data.anomaly?.is_anomaly} />
@@ -73,6 +93,9 @@ export default function AwsPage() {
       </div>
 
       <AnomalyHistory items={history} />
+
+      <Ec2InstancesPanel />
+      <ServiceUsagePanel days={days} />
     </div>
   );
 }

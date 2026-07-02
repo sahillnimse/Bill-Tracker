@@ -12,7 +12,7 @@ from typing import Any
 
 import boto3
 
-from anomaly import AnomalySettings, detect_anomaly
+from anomaly import AnomalySettings, compute_sma_series, detect_anomaly
 from config import aws_config, app_config
 
 logger = logging.getLogger("spendwatch.aws")
@@ -63,9 +63,10 @@ def _daily_cost_by_service(start: date, end: date) -> dict[str, dict[str, float]
     return results
 
 
-def fetch_aws_data() -> dict[str, Any]:
+    
+def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     today = date.today()
-    start = today - timedelta(days=30)
+    start = today - timedelta(days=days)
     # CE end date is exclusive, and "today" usually isn't finalized yet,
     # so we request through tomorrow to make sure today's partial data shows.
     daily = _daily_cost_by_service(start, today + timedelta(days=1))
@@ -98,13 +99,16 @@ def fetch_aws_data() -> dict[str, Any]:
 
     avg_per_day = round(sum(daily_totals) / len(daily_totals), 2) if daily_totals else 0.0
 
+    raw_daily_series = [{"date": d, "value": round(sum(daily[d].values()), 2)} for d in sorted_days]
+    daily_series = compute_sma_series(raw_daily_series, short_window=7, long_window=20)
+
     return {
         "provider": "aws",
         "today": today_total,
         "yesterday": yesterday_total,
         "month_to_date": mtd_total,
         "avg_per_day_30d": avg_per_day,
-        "daily_series": [{"date": d, "value": round(sum(daily[d].values()), 2)} for d in sorted_days],
+        "daily_series": daily_series,
         "services": [
             {"name": name, "amount": round(amt, 2), "pct": round(amt / total_svc * 100, 1)}
             for name, amt in top_services

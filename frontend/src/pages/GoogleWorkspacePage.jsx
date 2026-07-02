@@ -5,6 +5,7 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import ExportButton from "../components/ExportButton";
 
 export default function GoogleWorkspacePage({ days = 30 }) {
   const { data, loading, error } = useProvider("gworkspace", days);
@@ -33,6 +34,18 @@ export default function GoogleWorkspacePage({ days = 30 }) {
         </div>
       </div>
 
+      {data._error && (
+        <div className="a-banner">
+          <div className="a-icon">!</div>
+          <div>
+            <div className="a-title">API Connection Error</div>
+            <div className="a-text">
+              Failed to load live data for this provider: {data._error}. Please check credentials or API access.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-grid">
         <KpiCard accent="ga" label="Monthly cost"
           value={fmt(data.monthly_cost)} valueColor="var(--ga)"
@@ -44,6 +57,7 @@ export default function GoogleWorkspacePage({ days = 30 }) {
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
           deltaClass={deltaClass} />
       </div>
+      <ExportButton data={data} filename="google_workspace_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="ga">

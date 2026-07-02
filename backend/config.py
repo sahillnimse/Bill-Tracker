@@ -42,12 +42,6 @@ class RunPodConfig:
     api_key: str = _get("RUNPOD_API_KEY")
 
 
-@dataclass(frozen=True)
-class GoogleAnalyticsConfig:
-    property_id: str = _get("GA4_PROPERTY_ID")
-    service_account_json: str = _get("GA4_SERVICE_ACCOUNT_JSON_PATH")
-    monthly_license_cost: float = _get_float("GA4_MONTHLY_LICENSE_COST", 2250.0)
-
 
 @dataclass(frozen=True)
 class GoogleAdsConfig:
@@ -95,7 +89,6 @@ class AppConfig:
 
 aws_config = AWSConfig()
 runpod_config = RunPodConfig()
-ga4_config = GoogleAnalyticsConfig()
 google_ads_config = GoogleAdsConfig()
 ms365_config = Microsoft365Config()
 gworkspace_config = GoogleWorkspaceConfig()

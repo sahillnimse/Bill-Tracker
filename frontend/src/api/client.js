@@ -1,14 +1,13 @@
 import axios from "axios";
-import mockApi from "./mockClient";
+// No mock API import – using real FastAPI backend
 
+// API base URL configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
-// Flip to false once the FastAPI backend is running with real credentials
-const USE_MOCK = false;
 
 const client = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 500000,
 });
 
 const realApi = {
@@ -25,8 +24,11 @@ const realApi = {
   getSettings: () => client.get("/settings").then((r) => r.data),
   updateSettings: (payload) =>
     client.post("/settings", payload).then((r) => r.data),
+  getAwsInstances: () => client.get("/aws/instances").then((r) => r.data),
+  getAwsUsageBreakdown: (days = 30) =>
+    client.get("/aws/usage-breakdown", { params: { days } }).then((r) => r.data),
 };
 
-export const api = USE_MOCK ? mockApi : realApi;
+export const api = realApi;
 
 export default api;

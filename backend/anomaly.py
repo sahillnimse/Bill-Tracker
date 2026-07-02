@@ -81,3 +81,81 @@ def detect_anomaly(
         delta=round(delta, 2),
         severity=severity,
     )
+
+
+def _sma(values: Sequence[float], window: int) -> list[float | None]:
+    """
+    Simple moving average over `values`, where each point is the mean of the
+    trailing `window` values (inclusive of itself). Returns None for indices
+    before there's a full window of history.
+    """
+    out: list[float | None] = []
+    for i in range(len(values)):
+        if i + 1 < window:
+            out.append(None)
+        else:
+            out.append(round(statistics.fmean(values[i + 1 - window : i + 1]), 2))
+    return out
+
+
+def compute_sma_series(
+    daily_series: Sequence[dict],
+    short_window: int = 7,
+    long_window: int = 20,
+) -> list[dict]:
+    """
+    Takes a chronological list of {"date": str, "value": float} dicts and
+    annotates each point with:
+      - sma_short / sma_long: the trailing SMA values (None until enough history)
+      - pct_vs_sma_long: today's value vs the 20-day SMA, as a signed percent
+      - signal: "spike" | "dip" | "crossover_up" | "crossover_down" | "normal"
+
+    "spike"/"dip" mirror how % moves are typically read off a 7d/20d SMA pair:
+    when the short SMA pulls meaningfully away from the long SMA, that's flagged
+    as a spike (above) or dip (below). A crossover marks the day the short SMA
+    actually crosses the long SMA line, similar to a golden/death cross.
+    """
+    values = [d["value"] for d in daily_series]
+    sma_short = _sma(values, short_window)
+    sma_long = _sma(values, long_window)
+
+    annotated = []
+    prev_diff: float | None = None
+
+    for i, d in enumerate(daily_series):
+        s_short = sma_short[i]
+        s_long = sma_long[i]
+
+        pct_vs_long = None
+        signal = "normal"
+
+        if s_long:
+            pct_vs_long = round((d["value"] - s_long) / s_long * 100, 1)
+
+        if s_short is not None and s_long is not None and s_long > 0:
+            diff = s_short - s_long
+            crossed = prev_diff is not None and (
+                (prev_diff <= 0 and diff > 0) or (prev_diff >= 0 and diff < 0)
+            )
+
+            # Check the single-day magnitude FIRST — a big spike/dip on the day
+            # itself should never be masked just because the 7d/20d SMA lines
+            # happened to cross on the same day.
+            if pct_vs_long is not None and abs(pct_vs_long) >= 15:
+                signal = "spike" if pct_vs_long > 0 else "dip"
+            elif crossed:
+                signal = "crossover_up" if diff > 0 else "crossover_down"
+
+            prev_diff = diff
+
+        annotated.append(
+            {
+                **d,
+                "sma_short": s_short,
+                "sma_long": s_long,
+                "pct_vs_sma_long": pct_vs_long,
+                "signal": signal,
+            }
+        )
+
+    return annotated    

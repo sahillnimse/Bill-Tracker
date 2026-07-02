@@ -4,6 +4,7 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import ExportButton from "../components/ExportButton";
 
 export default function Microsoft365Page() {
   const { data, loading, error } = useProvider("ms365");
@@ -23,7 +24,22 @@ export default function Microsoft365Page() {
       <div className="ph">
         <div className="ph-title"><span style={{ color: "var(--ms)" }}>●</span> Microsoft 365</div>
         <div className="ph-sub">Licences · employee IDs · billing tracker</div>
+        <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4 }}>
+          ⓘ Time range selector doesn't apply here — this page shows current licence and billing snapshot, not historical daily data.
+        </div>
       </div>
+
+      {data._error && (
+        <div className="a-banner">
+          <div className="a-icon">!</div>
+          <div>
+            <div className="a-title">API Connection Error</div>
+            <div className="a-text">
+              Failed to load live data for this provider: {data._error}. Please check credentials or API access.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="kpi-grid">
         <KpiCard accent="ms" label="Total licences" value={data.total_licenses} valueColor="var(--ms)"
@@ -35,6 +51,7 @@ export default function Microsoft365Page() {
         <KpiCard accent="ms" label="MFA pending" value={data.mfa_pending} valueColor={data.mfa_pending > 0 ? "var(--warn)" : undefined}
           delta={data.mfa_pending > 0 ? "security risk" : "all enrolled"} deltaClass={data.mfa_pending > 0 ? "d-up" : "d-flat"} />
       </div>
+      <ExportButton data={data} filename="ms365_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="ms">

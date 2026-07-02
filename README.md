@@ -7,7 +7,7 @@ A faithful port of the `spendwatch_v3.html` mockup into a real, two-tier app:
   anomaly states, and see the exact same visual design as the original HTML.
 - **`backend/`** — FastAPI + Python, scaffolded but **not wired up yet** per
   your request. It already has real provider integrations written (AWS Cost
-  Explorer, RunPod GraphQL, GA4 Data API, Google Ads API, Microsoft Graph),
+  Explorer, RunPod GraphQL, Google Ads API, Microsoft Graph),
   z-score anomaly detection, SQLite caching, and Gmail SMTP alerts — same
   patterns as your existing cloud cost tracker. It's just not connected to
   the frontend yet.
@@ -48,7 +48,7 @@ frontend/
     hooks/
       useProviderData.js — data fetching + sync hooks
     pages/
-      Overview.jsx, AwsPage.jsx, RunPodPage.jsx, GoogleAnalyticsPage.jsx,
+      Overview.jsx, AwsPage.jsx, RunPodPage.jsx,
       GoogleAdsPage.jsx, Microsoft365Page.jsx, SettingsPage.jsx
     App.jsx              — router + shell layout
     App.css               — all component styles (ported 1:1 from the
@@ -64,7 +64,6 @@ backend/
   providers/
     aws.py                  — AWS Cost Explorer (boto3)
     runpod.py                — RunPod GraphQL API
-    google_analytics.py       — GA4 Data API (service account)
     google_ads.py              — Google Ads API (OAuth2)
     microsoft365.py             — Microsoft Graph (client credentials)
   .env.example                  — every credential needed, documented
@@ -84,7 +83,7 @@ backend/
 
 ## What's different (now using React Router instead of single-file JS)
 
-- Each provider is a real route (`/aws`, `/runpod`, `/ga4`, `/google-ads`,
+- Each provider is a real route (`/aws`, `/runpod`, `/google-ads`,
   `/ms365`, `/settings`) instead of a `nav()` function toggling `display`.
   Browser back/forward and direct links now work correctly.
 - The sub-tabs from the original (`Overview / Anomalies / Cost by tag /

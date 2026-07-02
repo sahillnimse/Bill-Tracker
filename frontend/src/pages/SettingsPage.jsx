@@ -17,7 +17,7 @@ export default function SettingsPage() {
     api
       .getSettings()
       .then(setSettings)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 

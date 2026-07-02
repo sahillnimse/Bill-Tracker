@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-import alerts
 from cache import (
+    cleanup_old_anomalies,
     get_anomaly_history,
     get_provider_cache,
     get_setting,
@@ -28,11 +28,12 @@ from cache import (
 )
 from config import app_config
 from providers import aws as aws_provider
+from providers import aws_resources
 from providers import google_ads as google_ads_provider
-from providers import google_analytics as ga4_provider
 from providers import google_workspace as gworkspace_provider
 from providers import microsoft365 as ms365_provider
 from providers import runpod as runpod_provider
+# mock_fallback intentionally not imported — no fake data served to frontend
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("spendwatch.main")
@@ -52,7 +53,6 @@ init_db()
 PROVIDERS = {
     "aws": aws_provider.fetch_aws_data,
     "runpod": runpod_provider.fetch_runpod_data,
-    "ga4": ga4_provider.fetch_ga4_data,
     "google_ads": google_ads_provider.fetch_google_ads_data,
     "ms365": ms365_provider.fetch_ms365_data,
     "gworkspace": gworkspace_provider.fetch_gworkspace_data,
@@ -61,14 +61,107 @@ PROVIDERS = {
 ANOMALY_LABELS = {
     "aws": "AWS",
     "runpod": "RunPod",
-    "ga4": "Google Analytics",
     "google_ads": "Google Ads",
     "ms365": "Microsoft 365",
     "gworkspace": "Google Workspace",
 }
 
 # Providers whose fetch functions accept a `days` parameter
-DAYS_AWARE_PROVIDERS = {"gworkspace"}
+DAYS_AWARE_PROVIDERS = {"gworkspace", "aws"}
+
+
+def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any]:
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    default_anomaly = {
+        "is_anomaly": False,
+        "z_score": 0.0,
+        "baseline_mean": 0.0,
+        "baseline_stdev": 0.0,
+        "today_value": 0.0,
+        "pct_vs_baseline": 0.0,
+        "delta": 0.0,
+        "severity": "ok",
+    }
+    
+    if provider_key == "aws":
+        return {
+            "provider": "aws",
+            "today": 0.0,
+            "yesterday": 0.0,
+            "month_to_date": 0.0,
+            "avg_per_day_30d": 0.0,
+            "daily_series": [{"date": today_iso, "value": 0.0}],
+            "services": [],
+            "anomaly": default_anomaly,
+            "region": "unknown",
+            "_status": "error",
+            "_error": error_msg,
+        }
+    elif provider_key == "runpod":
+        return {
+            "provider": "runpod",
+            "today": 0.0,
+            "active_pods_count": 0,
+            "gpu_hours_today": 0.0,
+            "month_to_date": 0.0,
+            "daily_series": [{"date": today_iso, "value": 0.0}],
+            "pods": [],
+            "gpu_breakdown": [],
+            "anomaly": default_anomaly,
+            "_status": "error",
+            "_error": error_msg,
+        }
+    elif provider_key == "google_ads":
+        return {
+            "provider": "google_ads",
+            "today": 0.0,
+            "month_to_date": 0.0,
+            "roas": 0.0,
+            "total_conversions_30d": 0.0,
+            "daily_series": [{"date": today_iso, "value": 0.0}],
+            "campaigns": [],
+            "anomaly": default_anomaly,
+            "_status": "error",
+            "_error": error_msg,
+        }
+    elif provider_key == "ms365":
+        return {
+            "provider": "ms365",
+            "total_licenses": 0,
+            "monthly_bill": 0.0,
+            "cost_per_user": 0.0,
+            "premium_count": 0,
+            "basic_count": 0,
+            "new_ids_7d": 0,
+            "bill_change_vs_last_week": 0.0,
+            "mfa_pending": 0,
+            "recent_users": [],
+            "_status": "error",
+            "_error": error_msg,
+        }
+    elif provider_key == "gworkspace":
+        return {
+            "provider": "gworkspace",
+            "seats": 0,
+            "monthly_cost": 0.0,
+            "cost_per_seat": 0.0,
+            "cost_per_gb": 0.0,
+            "total_storage_gb": 0.0,
+            "active_users": 0,
+            "drive_events_today": 0.0,
+            "avg_drive_events_per_day": 0.0,
+            "daily_series": [{"date": today_iso, "value": 0.0}],
+            "top_users": [],
+            "domain": "unknown",
+            "anomaly": default_anomaly,
+            "_status": "error",
+            "_error": error_msg,
+        }
+    return {
+        "provider": provider_key,
+        "_status": "error",
+        "_error": error_msg,
+    }
 
 
 def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
@@ -81,35 +174,38 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
         data["_status"] = "ok"
     except Exception as exc:
         logger.exception("Failed to fetch %s", provider_key)
-        cached = get_provider_cache(provider_key)
+        cached = get_provider_cache(provider_key, days=days)
         if cached:
             cached["_status"] = "stale"
             cached["_error"] = str(exc)
             return cached
-        return {"provider": provider_key, "_status": "error", "_error": str(exc)}
+        # No cache and no real data — return error schema instead of 502
+        return _get_empty_provider_data(provider_key, str(exc))
+
+    set_provider_cache(provider_key, data, days=days)
 
     anomaly = data.get("anomaly")
     if anomaly and anomaly.get("is_anomaly"):
+        label = ANOMALY_LABELS.get(provider_key, provider_key)
         message = (
-            f"{ANOMALY_LABELS.get(provider_key, provider_key)} anomaly: "
-            f"today ${anomaly['today_value']} vs baseline ${anomaly['baseline_mean']} "
-            f"({anomaly['pct_vs_baseline']:+.1f}%, z={anomaly['z_score']})"
+            f"{label} spend anomaly: today ${anomaly.get('today_value')} "
+            f"vs baseline ${anomaly.get('baseline_mean')} "
+            f"({anomaly.get('pct_vs_baseline')}% change)"
         )
         record_anomaly(
-            provider_key,
-            datetime.now(timezone.utc).date().isoformat(),
-            message,
-            anomaly["z_score"],
+            provider=provider_key,
+            date=datetime.now(timezone.utc).date().isoformat(),
+            message=message,
+            z_score=anomaly.get("z_score", 0.0),
         )
-        alerts.send_anomaly_email(provider_key, f"{ANOMALY_LABELS.get(provider_key)} cost anomaly", message)
 
-    set_provider_cache(provider_key, data)
+    cleanup_old_anomalies()
     return data
 
 
 def _get_provider_data(provider_key: str, force_refresh: bool = False, days: int = 30) -> dict[str, Any]:
     if not force_refresh:
-        cached = get_provider_cache(provider_key, max_age_seconds=app_config.cache_ttl_seconds)
+        cached = get_provider_cache(provider_key, max_age_seconds=app_config.cache_ttl_seconds, days=days)
         if cached:
             cached["_status"] = "cached"
             return cached
@@ -126,8 +222,8 @@ def overview(days: int = 30) -> dict[str, Any]:
     """Aggregated snapshot across all providers for the Overview page."""
     data = {key: _get_provider_data(key, days=days) for key in PROVIDERS}
 
-    today_total = sum(d.get("today", 0) or 0 for k, d in data.items() if k not in {"ga4", "gworkspace"})
-    mtd_total = sum(d.get("month_to_date", 0) or d.get("monthly_cost", 0) or 0 for k, d in data.items() if k not in {"ga4"})
+    today_total = sum(d.get("today", 0) or 0 for k, d in data.items() if k not in {"gworkspace"})
+    mtd_total = sum(d.get("month_to_date", 0) or d.get("monthly_cost", 0) or 0 for k, d in data.items())
     anomalies = [
         {"provider": k, **d["anomaly"]}
         for k, d in data.items()
@@ -173,6 +269,34 @@ def sync_provider(provider_key: str, days: int = 30) -> dict[str, Any]:
 @app.get("/api/anomalies")
 def anomalies(provider: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
     return get_anomaly_history(provider, limit)
+
+
+@app.get("/api/aws/instances")
+def aws_instances() -> dict[str, Any]:
+    """
+    Live EC2 instance inventory across all enabled regions: state, type,
+    uptime, and trailing-24h CPU utilization. Requires the IAM user to have
+    ec2:DescribeInstances, ec2:DescribeRegions, and cloudwatch:GetMetricData
+    permissions in addition to the existing Cost Explorer permission.
+    """
+    try:
+        return aws_resources.fetch_ec2_instances()
+    except Exception as exc:
+        logger.exception("Failed to fetch EC2 instances")
+        raise HTTPException(502, str(exc))
+
+
+@app.get("/api/aws/usage-breakdown")
+def aws_usage_breakdown(days: int = 30) -> dict[str, Any]:
+    """
+    Deep AWS Cost Explorer breakdown by service, usage type, and region —
+    shows exactly which AWS features/services are actively driving spend.
+    """
+    try:
+        return aws_resources.fetch_service_usage_breakdown(days=days)
+    except Exception as exc:
+        logger.exception("Failed to fetch AWS usage breakdown")
+        raise HTTPException(502, str(exc))
 
 
 class SettingsPayload(BaseModel):

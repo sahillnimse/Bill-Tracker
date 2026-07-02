@@ -6,6 +6,7 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import ExportButton from "../components/ExportButton";
 
 function formatRuntime(seconds = 0) {
   const h = Math.floor(seconds / 3600);
@@ -13,8 +14,8 @@ function formatRuntime(seconds = 0) {
   return `${h}h ${m}m`;
 }
 
-export default function RunPodPage() {
-  const { data, loading, error } = useProvider("runpod");
+export default function RunPodPage({ days = 30 }) {
+  const { data, loading, error } = useProvider("runpod", days);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -50,6 +51,18 @@ export default function RunPodPage() {
         <div className="ph-sub">GPU compute · pod-level cost tracking</div>
       </div>
 
+      {data._error && (
+        <div className="a-banner">
+          <div className="a-icon">!</div>
+          <div>
+            <div className="a-title">API Connection Error</div>
+            <div className="a-text">
+              Failed to load live data for this provider: {data._error}. Please check credentials or API access.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-grid">
         <KpiCard accent="runpod" label="Today" value={fmt(data.today)}
           valueColor={isAnomaly ? "var(--danger)" : undefined}
@@ -61,6 +74,7 @@ export default function RunPodPage() {
         <KpiCard accent="runpod" label="GPU hours today" value={`${data.gpu_hours_today}h`} />
         <KpiCard accent="runpod" label="Month to date" value={fmt(data.month_to_date)} />
       </div>
+      <ExportButton data={data} filename="runpod_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="runpod">

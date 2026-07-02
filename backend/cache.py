@@ -61,20 +61,22 @@ def get_conn():
         conn.close()
 
 
-def set_provider_cache(provider: str, payload: dict[str, Any]) -> None:
+def set_provider_cache(provider: str, payload: dict[str, Any], days: int = 30) -> None:
+    cache_key = f"{provider}:{days}"
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO provider_cache (provider, payload, fetched_at) VALUES (?, ?, ?) "
             "ON CONFLICT(provider) DO UPDATE SET payload=excluded.payload, fetched_at=excluded.fetched_at",
-            (provider, json.dumps(payload), time.time()),
+            (cache_key, json.dumps(payload), time.time()),
         )
         conn.commit()
 
 
-def get_provider_cache(provider: str, max_age_seconds: Optional[int] = None) -> Optional[dict[str, Any]]:
+def get_provider_cache(provider: str, max_age_seconds: Optional[int] = None, days: int = 30) -> Optional[dict[str, Any]]:
+    cache_key = f"{provider}:{days}"
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT payload, fetched_at FROM provider_cache WHERE provider = ?", (provider,)
+            "SELECT payload, fetched_at FROM provider_cache WHERE provider = ?", (cache_key,)
         ).fetchone()
     if not row:
         return None
@@ -87,11 +89,35 @@ def get_provider_cache(provider: str, max_age_seconds: Optional[int] = None) -> 
 
 
 def record_anomaly(provider: str, date: str, message: str, z_score: float, emailed: bool = False) -> None:
+    """Insert an anomaly, but skip if one was already recorded for this
+    provider+date within the last hour (prevents duplicate rows from
+    repeated polling/cache-refresh cycles hitting the same day's anomaly)."""
+    recent_cutoff = time.time() - 3600
     with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM anomaly_history WHERE provider = ? AND date = ? AND created_at >= ? LIMIT 1",
+            (provider, date, recent_cutoff),
+        ).fetchone()
+        if existing:
+            return
         conn.execute(
             "INSERT INTO anomaly_history (provider, date, message, z_score, emailed, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (provider, date, message, z_score, int(emailed), time.time()),
+        )
+        conn.commit()
+
+
+def cleanup_old_anomalies(max_age_hours: float = 36, max_rows: int = 500) -> None:
+    """Keep the anomaly_history table from growing unbounded.
+    History auto-clears after `max_age_hours` (default 36h)."""
+    cutoff = time.time() - (max_age_hours * 3600)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM anomaly_history WHERE created_at < ?", (cutoff,))
+        conn.execute(
+            "DELETE FROM anomaly_history WHERE id NOT IN ("
+            "SELECT id FROM anomaly_history ORDER BY created_at DESC LIMIT ?)",
+            (max_rows,),
         )
         conn.commit()
 

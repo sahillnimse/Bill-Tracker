@@ -5,11 +5,12 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import ExportButton from "../components/ExportButton";
 
 const CAMPAIGN_COLORS = ["var(--gads)", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
 
-export default function GoogleAdsPage() {
-  const { data, loading, error } = useProvider("google_ads");
+export default function GoogleAdsPage({ days = 30 }) {
+  const { data, loading, error } = useProvider("google_ads", days);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -33,6 +34,18 @@ export default function GoogleAdsPage() {
         <div className="ph-sub">Campaign spend · budget pacing · ROAS tracking</div>
       </div>
 
+      {data._error && (
+        <div className="a-banner">
+          <div className="a-icon">!</div>
+          <div>
+            <div className="a-title">API Connection Error</div>
+            <div className="a-text">
+              Failed to load live data for this provider: {data._error}. Please check credentials or API access.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-grid">
         <KpiCard accent="gads" label="Today spend" value={fmt(data.today)} valueColor="var(--gads)"
           delta={isAnomaly ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}% vs avg` : null}
@@ -41,6 +54,7 @@ export default function GoogleAdsPage() {
         <KpiCard accent="gads" label="ROAS (30d)" value={`${data.roas}×`} valueColor="var(--ok)" />
         <KpiCard accent="gads" label="Conversions (30d)" value={data.total_conversions_30d} />
       </div>
+      <ExportButton data={data} filename="google_ads_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="gads">

@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import KpiCard from "../components/KpiCard";
 import Sparkline from "../components/Sparkline";
 import { useCurrency } from "../context/CurrencyContext";
 
@@ -20,44 +19,109 @@ export default function Overview({ overview, loading, error }) {
   const { providers, today_total, month_to_date_total, projected_month_end, active_anomalies } = overview;
   const aws = providers.aws || {};
   const runpod = providers.runpod || {};
-  const ga4 = providers.ga4 || {};
   const gads = providers.google_ads || {};
   const ms365 = providers.ms365 || {};
 
   const topAnomaly = active_anomalies?.[0];
+  const providerCount = Object.keys(providers).length;
+
+  const yesterdayTotal = (aws.yesterday || 0) + (runpod.yesterday || 0) + (gads.yesterday || 0);
+  const deltaPct = yesterdayTotal > 0
+    ? Math.round(((today_total - yesterdayTotal) / yesterdayTotal) * 1000) / 10
+    : 0;
+
+  const formattedToday = fmt(today_total);
+  const tCcy = formattedToday.match(/^\D+/)?.[0]?.trim() || "";
+  const tDigits = formattedToday.replace(/^\D+/, "");
+  const [tWhole, tDecimal] = tDigits.split(".");
+
+  const errorProviders = Object.entries(providers)
+    .filter(([, p]) => p?._status === "error")
+    .map(([name]) => {
+      if (name === "google_ads") return "Google Ads";
+      if (name === "ms365") return "Microsoft 365";
+      if (name === "gworkspace") return "Google Workspace";
+      if (name === "aws") return "AWS";
+      if (name === "runpod") return "RunPod";
+      return name.toUpperCase();
+    });
 
   return (
     <div className="page" id="page-overview">
-      <div className="ph">
-        <div className="ph-title">
-          <span
-            style={{
-              fontSize: 22,
-              background: "linear-gradient(135deg,#818cf8,#e879f9,#f97316)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
-            SpendWatch
-          </span>
+      {/* HERO LEDGER STRIP */}
+      <div className="hero">
+        <div className="hero-eyebrow">
+          <span className="live-dot"></span>
+          Today across {providerCount} providers
         </div>
-        <div className="ph-sub">All providers · consolidated · live data</div>
+        <div className="hero-row">
+          <div>
+            <div className="hero-figure">
+              <span className="ccy">{tCcy}</span>
+              {tWhole}
+              {tDecimal && <span className="cents">.{tDecimal}</span>}
+            </div>
+            <div className="hero-label">
+              vs {fmt(yesterdayTotal)} yesterday
+              {yesterdayTotal > 0 && (
+                <> · trending {deltaPct >= 0 ? "up" : "down"} {Math.abs(deltaPct)}%</>
+              )}
+            </div>
+          </div>
+
+          <svg className="hero-ekg" viewBox="0 0 300 40" preserveAspectRatio="none">
+            <polyline
+               points="0,22 30,22 38,8 46,34 54,18 90,18 130,18 138,4 146,30 154,18 220,18 228,10 236,28 244,18 300,18"
+               fill="none"
+               stroke="var(--amber)"
+               strokeWidth="1.5"
+               opacity="0.8"
+            />
+          </svg>
+
+          <div className="hero-stats">
+            <div className="hstat">
+              <div className="hstat-val">{fmt(month_to_date_total)}</div>
+              <div className="hstat-label">Month to date</div>
+            </div>
+            <div className="hstat">
+              <div className="hstat-val" style={{ color: "var(--amber)" }}>{fmt(projected_month_end)}</div>
+              <div className="hstat-label">Projected</div>
+            </div>
+            <div className="hstat">
+              <div className="hstat-val" style={{ color: "var(--danger)" }}>{active_anomalies?.length || 0}</div>
+              <div className="hstat-label">Anomalies</div>
+            </div>
+          </div>
+        </div>
+        <div className="ledger-tick"></div>
       </div>
 
-      <div className="kpi-grid">
-        <KpiCard accent="violet" label="Today · all providers"
-          value={fmt(today_total)} valueColor="#a5b4fc" />
-        <KpiCard accent="gads" label="Month to date"
-          value={fmt(month_to_date_total)} valueColor="#93c5fd" />
-        <KpiCard accent="ga" label="Projected month-end"
-          value={fmt(projected_month_end)} valueColor="#6ee7b7"
-          delta="at current run rate" deltaClass="d-flat" />
-        <KpiCard accent="danger" label="Active anomalies"
-          value={active_anomalies?.length || 0} valueColor="var(--danger)"
-          delta={topAnomaly ? `${topAnomaly.provider} spike` : "none right now"} />
-      </div>
+      {/* ANOMALY STRIP */}
+      {topAnomaly && (
+        <div className="anomaly-strip">
+          <div className="a-icon">!</div>
+          <div className="a-text">
+            <b>{topAnomaly.provider} spend anomaly detected</b> — {topAnomaly.pct_vs_baseline > 0 ? "+" : ""}{topAnomaly.pct_vs_baseline}% vs baseline of {fmt(topAnomaly.baseline_mean)}/day.
+          </div>
+          <div className="a-link" onClick={() => navigate(`/${topAnomaly.provider === "google_ads" ? "google-ads" : topAnomaly.provider}`)}>            View history →
+          </div>
+        </div>
+      )}
 
+      {errorProviders.length > 0 && (
+        <div className="a-banner" style={{ marginBottom: 24, border: "1px solid rgba(245, 158, 11, 0.3)", background: "linear-gradient(135deg, rgba(245, 158, 11, 0.07), rgba(217, 70, 239, 0.02))" }}>
+          <div className="a-icon" style={{ background: "var(--orange)" }}>!</div>
+          <div>
+            <div className="a-title" style={{ color: "var(--orange)" }}>Provider Connection Notice</div>
+            <div className="a-text" style={{ color: "var(--t2)" }}>
+              Could not load live data for: {errorProviders.join(", ")}. Showing empty data. Please verify your .env credentials.
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid-label">Providers</div>
       <div className="ov-grid">
         <div className="pcard p-aws" onClick={() => navigate("/aws")}>
           <div className="pc-hdr">
@@ -97,24 +161,6 @@ export default function Overview({ overview, loading, error }) {
           <div className="pc-spark"><Sparkline series={runpod.daily_series} color="#e879f9" /></div>
         </div>
 
-        <div className="pcard p-ga" onClick={() => navigate("/ga4")}>
-          <div className="pc-hdr">
-            <div className="pc-icon" style={{ background: "rgba(16,185,129,.12)" }}>📊</div>
-            <div>
-              <div className="pc-name">Google Analytics</div>
-              <div className="pc-status">
-                <span className={`pip ${pipClass(ga4)}`}></span>
-                {ga4.anomaly?.is_anomaly ? "Anomaly · event spike" : "GA4 · normal"}
-              </div>
-            </div>
-          </div>
-          <div className="pc-stats">
-            <div><div className="pc-stat-label">Monthly</div><div className="pc-stat-val" style={{ color: "var(--ga)" }}>{fmt(ga4.monthly_license_cost)}</div></div>
-            <div><div className="pc-stat-label">Events</div><div className="pc-stat-val">{ga4.events_today ? `${(ga4.events_today / 1e6).toFixed(1)}M` : "—"}</div></div>
-            <div><div className="pc-stat-label">Quota</div><div className="pc-stat-val" style={{ color: "var(--ok)" }}>{ga4.quota_pct ?? "—"}%</div></div>
-          </div>
-          <div className="pc-spark"><Sparkline series={ga4.daily_series} color="#10b981" /></div>
-        </div>
 
         <div className="pcard p-gads" onClick={() => navigate("/google-ads")}>
           <div className="pc-hdr">
@@ -135,27 +181,24 @@ export default function Overview({ overview, loading, error }) {
           <div className="pc-spark"><Sparkline series={gads.daily_series} color="#3b82f6" /></div>
         </div>
 
-        <div className="pcard p-ms" onClick={() => navigate("/ms365")} style={{ gridColumn: "span 2" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div className="pc-hdr" style={{ marginBottom: 0 }}>
-              <div className="pc-icon" style={{ background: "rgba(6,182,212,.12)" }}>🪟</div>
-              <div>
-                <div className="pc-name">Microsoft 365</div>
-                <div className="pc-status">
-                  <span className={`pip ${ms365.new_ids_7d > 0 ? "pip-warn" : "pip-ok"}`}></span>
-                  {ms365.new_ids_7d > 0 ? `${ms365.new_ids_7d} new IDs this week` : "Stable"}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 22 }}>
-              <div><div className="pc-stat-label">Users</div><div className="pc-stat-val" style={{ color: "var(--ms)" }}>{ms365.total_licenses ?? "—"}</div></div>
-              <div><div className="pc-stat-label">Monthly bill</div><div className="pc-stat-val">{fmt(ms365.monthly_bill)}</div></div>
-              <div><div className="pc-stat-label">New IDs (7d)</div><div className="pc-stat-val" style={{ color: "var(--warn)" }}>+{ms365.new_ids_7d ?? 0}</div></div>
-              <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmt(ms365.cost_per_user)}</div></div>
+        <div className="pcard p-ms" onClick={() => navigate("/ms365")} style={{ gridColumn: "span 3" }}>            <div className="pc-hdr" style={{ marginBottom: 0 }}>
+          <div className="pc-icon" style={{ background: "rgba(6,182,212,.12)" }}>🪟</div>
+          <div>
+            <div className="pc-name">Microsoft 365</div>
+            <div className="pc-status">
+              <span className={`pip ${ms365.new_ids_7d > 0 ? "pip-warn" : "pip-ok"}`}></span>
+              {ms365.new_ids_7d > 0 ? `${ms365.new_ids_7d} new IDs this week` : "Stable"}
             </div>
           </div>
         </div>
+          <div style={{ display: "flex", gap: 22 }}>
+            <div><div className="pc-stat-label">Users</div><div className="pc-stat-val" style={{ color: "var(--ms)" }}>{ms365.total_licenses ?? "—"}</div></div>
+            <div><div className="pc-stat-label">Monthly bill</div><div className="pc-stat-val">{fmt(ms365.monthly_bill)}</div></div>
+            <div><div className="pc-stat-label">New IDs (7d)</div><div className="pc-stat-val" style={{ color: "var(--warn)" }}>+{ms365.new_ids_7d ?? 0}</div></div>
+            <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmt(ms365.cost_per_user)}</div></div>
+          </div>
       </div>
+    </div>
     </div>
   );
 }

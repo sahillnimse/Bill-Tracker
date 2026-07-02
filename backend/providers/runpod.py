@@ -60,7 +60,7 @@ def _fetch_pods() -> list[dict[str, Any]]:
 
     resp = httpx.post(
         RUNPOD_GRAPHQL_URL,
-        params={"api_key": runpod_config.api_key},
+        headers={"Authorization": f"Bearer {runpod_config.api_key}"},
         json={"query": PODS_QUERY},
         timeout=20,
     )

@@ -1,7 +1,6 @@
 const COLORS_BY_PROVIDER = {
   aws: ["var(--aws)", "#fb923c", "#fdba74", "#fde68a", "rgba(249,115,22,0.3)"],
   runpod: ["var(--runpod)", "#d946ef", "#a855f7", "#c084fc", "rgba(232,121,249,0.3)"],
-  ga4: ["var(--ga)", "#6ee7b7", "#a7f3d0", "#d1fae5", "rgba(16,185,129,0.3)"],
   gads: ["var(--gads)", "#60a5fa", "#93c5fd", "#bfdbfe", "rgba(59,130,246,0.3)"],
 };
 

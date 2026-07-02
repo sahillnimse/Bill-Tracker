@@ -108,29 +108,6 @@ function getRunpodMock() {
   };
 }
 
-// ---------- Google Analytics ----------
-function getGa4Mock() {
-  const series = buildDailySeries(30, 4_200_000, 800_000, 8, 2.1, 3);
-  const anomaly = zScoreOf({ ...series, length: series.length }.map ? series : series, 14);
-  const computedAnomaly = zScoreOf(series);
-  computedAnomaly.is_anomaly = Math.abs(computedAnomaly.z_score) >= 2.0 && Math.abs(computedAnomaly.delta) >= 100000;
-  return {
-    provider: "ga4",
-    monthly_license_cost: 2250,
-    events_today: series[series.length - 1].value,
-    avg_events_per_day: Math.round(series.reduce((a, b) => a + b.value, 0) / series.length),
-    quota_pct: 41,
-    active_platforms: 3,
-    daily_series: series,
-    platforms: [
-      { name: "Web main", events: 3_570_000, pct: 85 },
-      { name: "iOS app", events: 420_000, pct: 10 },
-      { name: "Android", events: 210_000, pct: 5 },
-    ],
-    anomaly: computedAnomaly,
-    _status: "mock",
-  };
-}
 
 // ---------- Google Ads ----------
 function getGoogleAdsMock() {
@@ -180,7 +157,6 @@ function getMs365Mock() {
 const PROVIDER_MOCKS = {
   aws: getAwsMock,
   runpod: getRunpodMock,
-  ga4: getGa4Mock,
   google_ads: getGoogleAdsMock,
   ms365: getMs365Mock,
 };
@@ -192,9 +168,6 @@ const ANOMALY_HISTORY_MOCK = {
   ],
   runpod: [
     { provider: "runpod", date: "Jun 26", message: "GPU spend spike: $640.80 vs baseline $224/day (+185%, z=3.8). Driven by A100 80GB pod running 18h+.", z_score: 3.8, emailed: true },
-  ],
-  ga4: [
-    { provider: "ga4", date: "Jun 21", message: "Event spike 9.1M (+118% vs 4.2M baseline). Quota hit 91%. Likely bot traffic or tracking loop. Z-score: 3.2.", z_score: 3.2, emailed: true },
   ],
   google_ads: [],
   ms365: [
@@ -213,7 +186,6 @@ export const mockApi = {
     const providers = {
       aws: getAwsMock(),
       runpod: getRunpodMock(),
-      ga4: getGa4Mock(),
       google_ads: getGoogleAdsMock(),
       ms365: getMs365Mock(),
     };

@@ -1,12 +1,11 @@
 import { NavLink } from "react-router-dom";
 
 const NAV_ITEMS = [
-  { path: "/aws",         key: "aws",        label: "AWS",                color: "var(--aws)"    },
-  { path: "/runpod",      key: "runpod",      label: "RunPod",             color: "var(--runpod)" },
-  { path: "/ga4",         key: "ga",          label: "Google Analytics",   color: "var(--ga)"     },
-  { path: "/google-ads",  key: "gads",        label: "Google Ads",         color: "var(--gads)"   },
-  { path: "/gworkspace",  key: "gworkspace",  label: "Google Workspace",   color: "#34a853"       },
-  { path: "/ms365",       key: "ms",          label: "Microsoft 365",      color: "var(--ms)"     },
+  { path: "/aws", key: "aws", label: "AWS", color: "var(--aws)" },
+  { path: "/runpod", key: "runpod", label: "RunPod", color: "var(--runpod)" },
+  { path: "/google-ads", key: "gads", label: "Google Ads", color: "var(--gads)" },
+  { path: "/gworkspace", key: "gworkspace", label: "Google Workspace", color: "#34a853" },
+  { path: "/ms365", key: "ms", label: "Microsoft 365", color: "var(--ms)" },
 ];
 
 export default function Sidebar({ anomalyCount = 0, providerBadges = {} }) {
@@ -14,10 +13,16 @@ export default function Sidebar({ anomalyCount = 0, providerBadges = {} }) {
     <nav className="sb">
       <div className="sb-head">
         <div className="logo-row">
-          <div className="gem">S</div>
-          <div className="logo-name">SpendWatch</div>
+          <div className="gem">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 18L9 7L13 14L16 9L20 18" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <div className="logo-name">SpendWatch</div>
+            <div className="logo-sub">Ledger · live</div>
+          </div>
         </div>
-        <div className="logo-sub">7 providers · real-time</div>
       </div>
 
       <div className="sb-sec">Overview</div>
