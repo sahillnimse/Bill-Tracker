@@ -7,10 +7,6 @@ import ServiceUsagePanel from "../components/ServiceUsagePanel";
 import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
-import SmaTrendCard from "../components/SmaTrendCard";
-import BudgetProgressBar from "../components/BudgetProgressBar";
-import MonthlyForecastCard from "../components/MonthlyForecastCard";
-import SpikeAlert from "../components/SpikeAlert";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
 

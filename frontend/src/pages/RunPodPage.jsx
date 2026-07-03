@@ -95,7 +95,7 @@ export default function RunPodPage({ days = 30 }) {
       </div>
 
       <div className="two-col">
-        <div className="panel">
+        <div className="panel panel--chart">
           <div className="panel-hdr">
             <div className="panel-title">GPU spend · 30 days</div>
             <div className="panel-stat" style={{ color: isAnomaly ? "var(--danger)" : "var(--t2)" }}>TODAY: {fmt(data.today)}</div>

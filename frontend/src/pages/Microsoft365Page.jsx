@@ -19,6 +19,14 @@ export default function Microsoft365Page() {
   if (error) return <div className="error-state">Couldn't load Microsoft 365 data: {error}</div>;
   if (!data) return null;
 
+  // Derive per-tier monthly cost from the users actually on that tier, rather
+  // than hardcoding a price here — avoids this page drifting out of sync with
+  // the backend's real pricing config (see MS365_STANDARD_LICENSE_COST /
+  // MS365_BASIC_LICENSE_COST in backend/.env). Values are USD; the $/₹ toggle
+  // (CurrencyContext) converts live for display.
+  const standardUnitCost = data.recent_users?.find((u) => u.license === "Business Standard")?.cost ?? 0;
+  const basicUnitCost = data.recent_users?.find((u) => u.license === "Business Basic")?.cost ?? 0;
+
   return (
     <div className="page" id="page-ms">
       <div className="ph">
@@ -55,14 +63,19 @@ export default function Microsoft365Page() {
 
       <div className="da-grid">
         <div className="da-card" data-accent="ms">
-          <div className="da-label">Premium licences</div>
-          <div className="da-val" style={{ color: "var(--ms)" }}>{data.premium_count}</div>
-          <div className="da-sub">{fmt(data.premium_count * 22)}/mo est.</div>
+          <div className="da-label">Standard licences</div>
+          <div className="da-val" style={{ color: "var(--ms)" }}>{data.standard_count}</div>
+          <div className="da-sub">{fmt(data.standard_count * (data.standard_cost_per_user || 14))}/mo est.</div>
         </div>
         <div className="da-card" data-accent="teal">
-          <div className="da-label">Basic licences</div>
+          <div className="da-label">Business Basic licences</div>
           <div className="da-val" style={{ color: "var(--teal)" }}>{data.basic_count}</div>
-          <div className="da-sub">{fmt(data.basic_count * 6)}/mo est.</div>
+          <div className="da-sub">{fmt(data.basic_count * (data.basic_cost_per_user || 7))}/mo est.</div>
+        </div>
+        <div className="da-card" data-accent="t3">
+          <div className="da-label">Free / trial seats</div>
+          <div className="da-val" style={{ color: "var(--t3)" }}>{data.free_count}</div>
+          <div className="da-sub">not billed</div>
         </div>
         <div className="da-card" data-accent="warn">
           <div className="da-label">New IDs · 7 days</div>
@@ -73,17 +86,18 @@ export default function Microsoft365Page() {
 
       <div className="panel">
         <div className="panel-hdr">
-          <div className="panel-title">Recent employee IDs</div>
-          <div className="panel-stat">sorted by creation date</div>
+          <div className="panel-title">Employee IDs</div>
+          <div className="panel-stat">sorted by creation date · {data.recent_users?.length ?? 0} total</div>
         </div>
         {!data.recent_users?.length && <div className="empty-state">No user data available.</div>}
         {data.recent_users?.length > 0 && (
           <table className="etable">
             <thead>
               <tr>
-                <th style={{ width: "26%" }}>Name</th>
-                <th style={{ width: "30%" }}>Email</th>
-                <th style={{ width: "22%" }}>Licence</th>
+                <th style={{ width: "20%" }}>Name</th>
+                <th style={{ width: "24%" }}>Email</th>
+                <th style={{ width: "16%" }}>Title</th>
+                <th style={{ width: "16%" }}>Licence</th>
                 <th style={{ width: "12%" }}>Created</th>
                 <th style={{ width: "10%" }}>Cost/mo</th>
               </tr>
@@ -93,6 +107,7 @@ export default function Microsoft365Page() {
                 <tr key={i}>
                   <td style={{ color: "var(--t1)", fontWeight: 500 }}>{u.name}</td>
                   <td style={{ fontSize: 11, fontFamily: "var(--mono)" }}>{u.email}</td>
+                  <td style={{ fontSize: 11 }}>{u.title}</td>
                   <td>{u.license}</td>
                   <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{u.created}</td>
                   <td style={{ fontFamily: "var(--mono)" }}>{fmt(u.cost)}</td>

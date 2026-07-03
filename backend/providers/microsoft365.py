@@ -7,8 +7,15 @@ User.Read.All, Directory.Read.All (admin consent granted).
 Microsoft Graph doesn't expose actual $ billing — that lives in the
 Microsoft 365 Admin Center / Partner Center billing API, which isn't
 generally available without a CSP/partner relationship. So billing here
-is computed from licence SKU counts × per-seat costs configured in .env,
-which is how most internal cost trackers approximate it.
+is computed from licence SKU counts × per-seat costs configured in .env.
+
+SKU CLASSIFICATION:
+XARKA only uses two licence tiers — Business Basic and Business Standard
+(confirmed, no Premium in use). We classify by seat count: the SKU with
+the most seats is Basic (the default/bulk plan), any other distinct SKU
+present is Standard. If a third distinct SKU ever appears, it also gets
+labelled Standard rather than invented as "Premium" — update TIER_ORDER
+below if XARKA ever actually adds a Premium tier.
 """
 from __future__ import annotations
 
@@ -26,10 +33,6 @@ logger = logging.getLogger("spendwatch.ms365")
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
-# Common SKU part-number prefixes -> friendly tier name + assumed cost lookup
-PREMIUM_SKUS = {"SPE_E5", "ENTERPRISEPREMIUM", "SPB"}  # Business Premium / E5 / Spt Biz
-BASIC_SKUS = {"O365_BUSINESS_ESSENTIALS", "EXCHANGESTANDARD"}  # Business Basic, etc.
-
 
 def _get_token() -> str:
     if not (ms365_config.tenant_id and ms365_config.client_id and ms365_config.client_secret):
@@ -46,10 +49,18 @@ def _get_token() -> str:
     return result["access_token"]
 
 
-def _graph_get(token: str, path: str, params: dict | None = None) -> dict[str, Any]:
+def _graph_get(
+    token: str,
+    path: str,
+    params: dict | None = None,
+    extra_headers: dict | None = None,
+) -> dict[str, Any]:
+    headers = {"Authorization": f"Bearer {token}"}
+    if extra_headers:
+        headers.update(extra_headers)
     resp = httpx.get(
         f"{GRAPH_BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=headers,
         params=params or {},
         timeout=20,
     )
@@ -73,7 +84,7 @@ def _ensure_snapshot_table() -> None:
         conn.commit()
 
 
-def _record_snapshot(total: int, premium: int, basic: int, bill: float) -> None:
+def _record_snapshot(total: int, standard: int, basic: int, bill: float) -> None:
     _ensure_snapshot_table()
     today = datetime.now(timezone.utc).date().isoformat()
     with get_conn() as conn:
@@ -82,7 +93,7 @@ def _record_snapshot(total: int, premium: int, basic: int, bill: float) -> None:
             "VALUES (?, ?, ?, ?, ?) ON CONFLICT(date) DO UPDATE SET "
             "total_licenses=excluded.total_licenses, premium_count=excluded.premium_count, "
             "basic_count=excluded.basic_count, monthly_bill=excluded.monthly_bill",
-            (today, total, premium, basic, bill),
+            (today, total, standard, basic, bill),
         )
         conn.commit()
 
@@ -100,52 +111,136 @@ def _last_week_snapshot() -> dict[str, Any] | None:
     return {"total_licenses": row[0], "monthly_bill": row[1]}
 
 
+def _build_tier_map(skus: list[dict[str, Any]]) -> dict[str, tuple[str, str, float]]:
+    """
+    Explicit mapping by skuPartNumber — no more guessing by seat count.
+    XARKA only has Basic + Standard as real paid tiers. Free/trial
+    Microsoft add-ons are tracked separately and never billed.
+    """
+    KNOWN_SKUS = {
+        "O365_BUSINESS_ESSENTIALS": ("basic", "Business Basic", ms365_config.basic_license_cost),
+        "O365_BUSINESS_PREMIUM": ("standard", "Business Standard", ms365_config.standard_license_cost),
+        "FLOW_FREE": ("free", "Power Automate (Free)", 0.0),
+        "PROJECT_MADEIRA_PREVIEW_IW_SKU": ("free", "Business Central (Trial)", 0.0),
+    }
+
+    tier_map: dict[str, tuple[str, str, float]] = {}
+    for sku in skus:
+        if sku.get("consumedUnits", 0) <= 0:
+            continue
+        part = sku.get("skuPartNumber", "")
+        sku_id = sku.get("skuId", "")
+        if part in KNOWN_SKUS:
+            tier_map[sku_id] = KNOWN_SKUS[part]
+        else:
+            logger.warning(
+                "Unrecognized SKU %s (skuId=%s, %s consumed seats) — add it to KNOWN_SKUS in _build_tier_map.",
+                part, sku_id, sku.get("consumedUnits"),
+            )
+            tier_map[sku_id] = ("unknown", part or "Unknown SKU", 0.0)
+
+    return tier_map
+
+
+def _get_job_titles(token: str, user_ids: list[str]) -> dict[str, str]:
+    """
+    Best-effort fetch of jobTitle for a batch of users. Returns {user_id: title}.
+    If a user has no jobTitle set in Azure AD, they won't appear in the result
+    (caller should default to something like "—").
+    """
+    titles: dict[str, str] = {}
+    for uid in user_ids:
+        try:
+            resp = _graph_get(token, f"/users/{uid}", params={"$select": "id,jobTitle"})
+            title = resp.get("jobTitle")
+            if title:
+                titles[uid] = title
+        except httpx.HTTPStatusError:
+            pass  # missing permission or field — leave unset, not fatal
+    return titles
+
+
 def fetch_ms365_data() -> dict[str, Any]:
     token = _get_token()
 
     skus_resp = _graph_get(token, "/subscribedSkus")
     skus = skus_resp.get("value", [])
 
-    premium_count = 0
-    basic_count = 0
-    other_count = 0
-    for sku in skus:
-        part = sku.get("skuPartNumber", "")
-        assigned = sku.get("consumedUnits", 0)
-        if part in PREMIUM_SKUS:
-            premium_count += assigned
-        elif part in BASIC_SKUS:
-            basic_count += assigned
-        else:
-            other_count += assigned
+    tier_map = _build_tier_map(skus)
 
-    total_licenses = premium_count + basic_count + other_count
+    tier_counts: dict[str, int] = {}
+    tier_costs: dict[str, float] = {}
+    for sku in skus:
+        sku_id = sku.get("skuId", "")
+        assigned = sku.get("consumedUnits", 0)
+        if sku_id in tier_map:
+            tier, _, cost = tier_map[sku_id]
+            tier_counts[tier] = tier_counts.get(tier, 0) + assigned
+            tier_costs[tier] = cost  # per-seat cost for this tier
+        elif assigned > 0:
+            logger.warning(
+                "SKU %s (skuId=%s) has %s consumed seats but wasn't classified — investigate.",
+                sku.get("skuPartNumber"), sku_id, assigned,
+            )
+
+    # Only "basic" and "standard" are real paid seats.
+    # "free" and "unknown" tiers are tracked but never billed.
+    PAID_TIERS = {"basic", "standard"}
+
+    standard_count = tier_counts.get("standard", 0)
+    basic_count = tier_counts.get("basic", 0)
+    free_count = sum(v for k, v in tier_counts.items() if k not in PAID_TIERS)
+
+    total_licenses = sum(v for k, v in tier_counts.items() if k in PAID_TIERS)
+
     monthly_bill = round(
-        premium_count * ms365_config.premium_license_cost + basic_count * ms365_config.basic_license_cost,
+        sum(tier_counts[t] * tier_costs[t] for t in tier_counts if t in PAID_TIERS),
         2,
     )
-    _record_snapshot(total_licenses, premium_count, basic_count, monthly_bill)
+    _record_snapshot(total_licenses, standard_count, basic_count, monthly_bill)
 
-    # Recently created users, sorted by creation date desc
+    # ALL users, not just recent 10 — sorted by creation date desc, with licence + job title
     users_resp = _graph_get(
         token,
         "/users",
         params={
-            "$select": "displayName,mail,userPrincipalName,createdDateTime,id",
+            "$select": "displayName,mail,userPrincipalName,createdDateTime,id,jobTitle",
             "$orderby": "createdDateTime desc",
-            "$top": "10",
+            "$top": "999",
+            "$count": "true",
         },
+        extra_headers={"ConsistencyLevel": "eventual"},
     )
+
     recent_users = []
     for u in users_resp.get("value", []):
         created = u.get("createdDateTime", "")
+        user_id = u.get("id")
+
+        license_names = []
+        license_cost = 0.0
+        try:
+            lic_resp = _graph_get(token, f"/users/{user_id}/licenseDetails")
+            lic_values = lic_resp.get("value", [])
+            for lv in lic_values:
+                sku_id = lv.get("skuId", "")
+                if sku_id in tier_map:
+                    _, name, cost = tier_map[sku_id]
+                    license_names.append(name)
+                    license_cost += cost
+                else:
+                    license_names.append(lv.get("skuPartNumber", "Unknown"))
+        except httpx.HTTPStatusError:
+            logger.warning("Could not fetch licenseDetails for user %s", user_id)
+
         recent_users.append(
             {
                 "name": u.get("displayName"),
                 "email": u.get("mail") or u.get("userPrincipalName"),
+                "title": u.get("jobTitle") or "—",
                 "created": created[:10] if created else None,
-                "license": "Business Premium" if premium_count else "Business Basic",
-                "cost": ms365_config.premium_license_cost,
+                "license": ", ".join(license_names) if license_names else "Unlicensed",
+                "cost": round(license_cost, 2),
             }
         )
 
@@ -166,8 +261,12 @@ def fetch_ms365_data() -> dict[str, Any]:
         "total_licenses": total_licenses,
         "monthly_bill": monthly_bill,
         "cost_per_user": round(monthly_bill / total_licenses, 2) if total_licenses else 0.0,
-        "premium_count": premium_count,
         "basic_count": basic_count,
+        "standard_count": standard_count,
+        "free_count": free_count,
+        "basic_cost_per_user": ms365_config.basic_license_cost,
+        "standard_cost_per_user": ms365_config.standard_license_cost,
+        "premium_cost_per_user": ms365_config.premium_license_cost,
         "new_ids_7d": new_ids_7d,
         "bill_change_vs_last_week": round(bill_change, 2),
         "mfa_pending": mfa_pending,

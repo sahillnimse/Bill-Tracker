@@ -1,17 +1,18 @@
-"""
-RunPod provider — pulls live pod status + cost data via RunPod's GraphQL API.
+﻿"""
+RunPod provider — pulls billing + live pod status via RunPod's REST API.
 
-RunPod doesn't expose a clean historical daily-billing endpoint, so this
-combines:
-  - `myself { pods {...} }` for currently running pods (real-time cost rate)
-  - locally accumulated daily totals (stored in SQLite) built by summing
-    pod runtime * cost/hr each time /sync runs, since RunPod's billing API
-    does not provide a simple per-day historical series.
+RunPod's GraphQL `myself.pods` and REST `/v1/pods` only list pods that are
+CURRENTLY running — once a pod is stopped/terminated, it vanishes from both,
+even though it was billed real money while it ran. So this provider uses:
+  - REST `/v1/billing/pods` as the source of truth for spend (works whether
+    or not anything is running right now, and survives pod termination)
+  - REST `/v1/pods` only for "how many pods are running right now" (a live
+    status count, separate from historical billing)
 """
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -22,117 +23,90 @@ from config import app_config, runpod_config
 
 logger = logging.getLogger("spendwatch.runpod")
 
-RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
-
-PODS_QUERY = """
-query Pods {
-  myself {
-    pods {
-      id
-      name
-      desiredStatus
-      costPerHr
-      machine { gpuDisplayName }
-      runtime { uptimeInSeconds }
-    }
-  }
-}
-"""
+REST_BASE = "https://rest.runpod.io/v1"
 
 
-def _ensure_history_table() -> None:
-    with get_conn() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS runpod_daily (
-                date TEXT PRIMARY KEY,
-                total_cost REAL NOT NULL,
-                gpu_hours REAL NOT NULL
-            )
-            """
-        )
-        conn.commit()
-
-
-def _fetch_pods() -> list[dict[str, Any]]:
+def _rest_get(path: str, params: dict | None = None) -> Any:
     if not runpod_config.api_key:
         raise RuntimeError("RUNPOD_API_KEY missing in .env")
 
-    resp = httpx.post(
-        RUNPOD_GRAPHQL_URL,
+    resp = httpx.get(
+        f"{REST_BASE}{path}",
         headers={"Authorization": f"Bearer {runpod_config.api_key}"},
-        json={"query": PODS_QUERY},
-        timeout=20,
+        params=params or {},
+        timeout=30,
     )
     resp.raise_for_status()
-    data = resp.json()
-    if "errors" in data:
-        raise RuntimeError(f"RunPod API error: {data['errors']}")
-    return data["data"]["myself"]["pods"] or []
+    return resp.json()
 
 
-def _record_today_snapshot(pods: list[dict[str, Any]]) -> None:
-    """Accumulate today's running-cost estimate into the local daily history table."""
-    _ensure_history_table()
-    today_str = date.today().isoformat()
-    today_cost = sum((p.get("costPerHr") or 0) * (p.get("runtime", {}).get("uptimeInSeconds", 0) or 0) / 3600 for p in pods)
-    today_gpu_hours = sum((p.get("runtime", {}).get("uptimeInSeconds", 0) or 0) / 3600 for p in pods if p.get("desiredStatus") == "RUNNING")
-
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT INTO runpod_daily (date, total_cost, gpu_hours) VALUES (?, ?, ?) "
-            "ON CONFLICT(date) DO UPDATE SET total_cost=excluded.total_cost, gpu_hours=excluded.gpu_hours",
-            (today_str, round(today_cost, 2), round(today_gpu_hours, 2)),
-        )
-        conn.commit()
+def _fetch_active_pods() -> list[dict[str, Any]]:
+    """Live pod list — only reflects pods running right now."""
+    result = _rest_get("/pods")
+    return result if isinstance(result, list) else []
 
 
-def _get_daily_history(limit_days: int = 30) -> list[dict[str, Any]]:
-    _ensure_history_table()
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT date, total_cost, gpu_hours FROM runpod_daily ORDER BY date DESC LIMIT ?",
-            (limit_days,),
-        ).fetchall()
-    rows.reverse()
-    return [{"date": r[0], "value": r[1], "gpu_hours": r[2]} for r in rows]
-
-
-def fetch_runpod_data() -> dict[str, Any]:
-    pods = _fetch_pods()
-    _record_today_snapshot(pods)
-    history = _get_daily_history()
-
-    daily_totals = [d["value"] for d in history]
-    settings = AnomalySettings(
-        z_threshold=app_config.z_score_threshold,
-        min_dollar_delta=app_config.min_dollar_delta,
-        baseline_window_days=app_config.baseline_window_days,
+def _fetch_billing(days: int) -> list[dict[str, Any]]:
+    """Historical per-day, per-GPU-type billing — survives pod termination."""
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    result = _rest_get(
+        "/billing/pods",
+        params={
+            "startTime": start,
+            "endTime": end,
+            "bucketSize": "day",
+            "grouping": "gpuTypeId",
+        },
     )
-    anomaly = detect_anomaly(daily_totals, settings)
+    return result if isinstance(result, list) else []
 
-    today_data = history[-1] if history else {"value": 0.0, "gpu_hours": 0.0}
-    month_str = date.today().strftime("%Y-%m")
-    mtd_total = round(sum(d["value"] for d in history if d["date"].startswith(month_str)), 2)
 
-    # GPU type breakdown from currently running pods
+def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
+    active_pods = _fetch_active_pods()
+    billing_rows = _fetch_billing(days=days)
+
+    daily_totals: dict[str, float] = {}
+    daily_hours: dict[str, float] = {}
     gpu_costs: dict[str, float] = {}
-    active_pods = []
-    for p in pods:
-        gpu_name = (p.get("machine") or {}).get("gpuDisplayName", "Unknown GPU")
-        uptime_hr = (p.get("runtime", {}).get("uptimeInSeconds", 0) or 0) / 3600
-        cost = (p.get("costPerHr") or 0) * uptime_hr
-        gpu_costs[gpu_name] = gpu_costs.get(gpu_name, 0.0) + cost
-        active_pods.append(
-            {
-                "id": p.get("id"),
-                "name": p.get("name") or gpu_name,
-                "status": p.get("desiredStatus"),
-                "cost_per_hr": p.get("costPerHr"),
-                "uptime_seconds": p.get("runtime", {}).get("uptimeInSeconds", 0) if p.get("runtime") else 0,
-                "estimated_cost": round(cost, 2),
-            }
-        )
+
+    for row in billing_rows:
+        day = (row.get("time") or "")[:10]
+        amount = row.get("amount") or 0.0
+        ms = row.get("timeBilledMs") or 0
+        gpu = row.get("gpuTypeId") or "Unknown GPU"
+
+        daily_totals[day] = daily_totals.get(day, 0.0) + amount
+        daily_hours[day] = daily_hours.get(day, 0.0) + (ms / 3_600_000)
+        gpu_costs[gpu] = gpu_costs.get(gpu, 0.0) + amount
+
+   # Zero-fill any days with no billing activity, up through today —
+    # otherwise the series silently stops at the last day with real spend,
+    # and "today" in the UI ends up pointing at stale data.
+    if daily_totals:
+        earliest = min(daily_totals.keys())
+        start_date = datetime.strptime(earliest, "%Y-%m-%d").date()
+        end_date = date.today()
+        all_days = []
+        d = start_date
+        while d <= end_date:
+            all_days.append(d.isoformat())
+            d += timedelta(days=1)
+    else:
+        all_days = [date.today().isoformat()]
+
+    daily_series = [
+        {"date": d, "value": round(daily_totals.get(d, 0.0), 2)}
+        for d in all_days
+    ]
+
+    today_str = date.today().isoformat()
+    today_cost = round(daily_totals.get(today_str, 0.0), 2)
+    today_gpu_hours = round(daily_hours.get(today_str, 0.0), 2)
+
+    month_str = date.today().strftime("%Y-%m")
+    mtd_total = round(sum(v for d, v in daily_totals.items() if d.startswith(month_str)), 2)
 
     total_gpu_cost = sum(gpu_costs.values()) or 1.0
     gpu_breakdown = [
@@ -140,16 +114,33 @@ def fetch_runpod_data() -> dict[str, Any]:
         for name, amt in sorted(gpu_costs.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
-    running_count = sum(1 for p in pods if p.get("desiredStatus") == "RUNNING")
+    running_count = sum(1 for p in active_pods if p.get("desiredStatus") == "RUNNING")
+    pods_out = [
+        {
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "status": p.get("desiredStatus"),
+            "cost_per_hr": p.get("costPerHr"),
+            "gpu": ((p.get("machine") or {}).get("gpuDisplayName")),
+        }
+        for p in active_pods
+    ]
+
+    settings = AnomalySettings(
+        z_threshold=app_config.z_score_threshold,
+        min_dollar_delta=app_config.min_dollar_delta,
+        baseline_window_days=app_config.baseline_window_days,
+    )
+    anomaly = detect_anomaly([d["value"] for d in daily_series], settings)
 
     return {
         "provider": "runpod",
-        "today": today_data["value"],
+        "today": today_cost,
         "active_pods_count": running_count,
-        "gpu_hours_today": today_data.get("gpu_hours", 0.0),
+        "gpu_hours_today": today_gpu_hours,
         "month_to_date": mtd_total,
-        "daily_series": [{"date": d["date"], "value": d["value"]} for d in history],
-        "pods": active_pods,
+        "daily_series": daily_series,
+        "pods": pods_out,
         "gpu_breakdown": gpu_breakdown,
         "anomaly": anomaly.__dict__,
         "as_of": datetime.now(timezone.utc).isoformat(),

@@ -58,8 +58,12 @@ class Microsoft365Config:
     tenant_id: str = _get("MS365_TENANT_ID")
     client_id: str = _get("MS365_CLIENT_ID")
     client_secret: str = _get("MS365_CLIENT_SECRET")
-    premium_license_cost: float = _get_float("MS365_PREMIUM_LICENSE_COST", 22.0)
-    basic_license_cost: float = _get_float("MS365_BASIC_LICENSE_COST", 6.0)
+
+    # USD list prices (source of truth, backend always computes in USD).
+    # Updated to Microsoft's July 1, 2026 US list pricing.
+    basic_license_cost: float = _get_float("MS365_BASIC_LICENSE_COST", 7.0)      # was 6.0
+    standard_license_cost: float = _get_float("MS365_STANDARD_LICENSE_COST", 14.0)  # new tier, was missing
+    premium_license_cost: float = _get_float("MS365_PREMIUM_LICENSE_COST", 22.0)    # unchanged
 
 
 @dataclass(frozen=True)
