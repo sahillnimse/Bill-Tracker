@@ -170,9 +170,10 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
             data = aws_provider.fetch_aws_data(days=days)
         elif provider_key == "gworkspace":
             data = gworkspace_provider.fetch_gworkspace_data(days=days)
+        elif provider_key == "runpod":
+            data = runpod_provider.fetch_runpod_data(days=days)
         else:
             data = PROVIDERS[provider_key]()
-        data["_status"] = "ok"
     except Exception as exc:
         logger.exception("Failed to fetch %s", provider_key)
         cached = get_provider_cache(provider_key, days=days)

@@ -10,8 +10,8 @@ import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
 
-export default function AwsPage({ days = 30 }) {
-  const { data, loading, error } = useProvider("aws", days);
+export default function AwsPage({ days = 30, syncVersion = 0 }) {
+  const { data, loading, error } = useProvider("aws", days, syncVersion);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -52,7 +52,7 @@ export default function AwsPage({ days = 30 }) {
         <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} />
         <KpiCard accent="aws" label="30-day avg/day" value={fmt(data.avg_per_day_30d)} />
       </div>
-        <ExportButton data={data} filename="aws_data.json" label="Export Details" />
+      <ExportButton data={data} filename="aws_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="aws">

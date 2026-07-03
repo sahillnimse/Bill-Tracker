@@ -27,7 +27,7 @@ function badgesFromOverview(overview) {
 
 function AppShell() {
   const [days, setDays] = useState(30);
-  const { data: overview, loading, syncing, error, syncAll, lastSyncedAt } = useOverview(days);
+  const { data: overview, loading, syncing, error, syncAll, lastSyncedAt, syncVersion } = useOverview(days);
   const location = useLocation();
 
   useEffect(() => {
@@ -52,11 +52,11 @@ function AppShell() {
         <div className="content">
           <Routes>
             <Route path="/" element={<Overview overview={overview} loading={loading} error={error} />} />
-            <Route path="/aws" element={<AwsPage days={days} />} />
-            <Route path="/runpod" element={<RunPodPage days={days} />} />
-            <Route path="/google-ads" element={<GoogleAdsPage days={days} />} />
-            <Route path="/ms365" element={<Microsoft365Page days={days} />} />
-            <Route path="/gworkspace" element={<GoogleWorkspacePage days={days} />} />
+            <Route path="/aws" element={<AwsPage days={days} syncVersion={syncVersion} />} />
+            <Route path="/runpod" element={<RunPodPage days={days} syncVersion={syncVersion} />} />
+            <Route path="/google-ads" element={<GoogleAdsPage days={days} syncVersion={syncVersion} />} />
+            <Route path="/ms365" element={<Microsoft365Page days={days} syncVersion={syncVersion} />} />
+            <Route path="/gworkspace" element={<GoogleWorkspacePage days={days} syncVersion={syncVersion} />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>

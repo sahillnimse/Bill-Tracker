@@ -6,8 +6,8 @@ import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
 
-export default function Microsoft365Page() {
-  const { data, loading, error } = useProvider("ms365");
+export default function Microsoft365Page({ syncVersion = 0 }) {
+  const { data, loading, error } = useProvider("ms365", 30, syncVersion);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 

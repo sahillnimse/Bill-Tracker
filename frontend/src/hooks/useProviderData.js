@@ -7,6 +7,7 @@ export function useOverview(days = 30) {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [syncVersion, setSyncVersion] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,6 +30,9 @@ export function useOverview(days = 30) {
       await api.syncAll(days);
       await load();
       setLastSyncedAt(new Date().toISOString());
+      // Bump this so any provider page currently mounted knows a fresh
+      // sync just landed in the cache and reloads itself.
+      setSyncVersion((v) => v + 1);
     } catch (err) {
       setError(err.message || "Sync failed");
     } finally {
@@ -40,15 +44,16 @@ export function useOverview(days = 30) {
     load();
   }, [load]);
 
-  return { data, loading, syncing, error, syncAll, reload: load, lastSyncedAt };
+  return { data, loading, syncing, error, syncAll, reload: load, lastSyncedAt, syncVersion };
 }
 
-export function useProvider(providerKey, days = 30) {
+export function useProvider(providerKey, days = 30, refreshKey = 0) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
 
+  // Cached read - used for quick initial paint only.
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -75,9 +80,21 @@ export function useProvider(providerKey, days = 30) {
     }
   }, [providerKey, days]);
 
+  // On mount / days change: force a live fetch (bypasses cache) so the page
+  // never opens showing a stale snapshot.
   useEffect(() => {
-    load();
-  }, [load]);
+    sync();
+  }, [sync]);
+
+  // Whenever the app-level sync (Topbar) completes, refresh this page too -
+  // this is what makes an already-open page pick up new data live instead
+  // of sitting on whatever it rendered on mount.
+  useEffect(() => {
+    if (refreshKey > 0) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   return { data, loading, syncing, error, sync, reload: load };
 }

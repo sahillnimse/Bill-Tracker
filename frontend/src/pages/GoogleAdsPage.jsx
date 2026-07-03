@@ -9,8 +9,8 @@ import ExportButton from "../components/ExportButton";
 
 const CAMPAIGN_COLORS = ["var(--gads)", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
 
-export default function GoogleAdsPage({ days = 30 }) {
-  const { data, loading, error } = useProvider("google_ads", days);
+export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
+  const { data, loading, error } = useProvider("google_ads", days, syncVersion);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -76,7 +76,7 @@ export default function GoogleAdsPage({ days = 30 }) {
 
       <div className="two-col">
         <div className="panel">
-          <div className="panel-hdr"><div className="panel-title">Daily ad spend · 30 days</div></div>
+          <div className="panel-hdr"><div className="panel-title">Daily ad spend · {days} days</div></div>
           <DailyBarChart series={data.daily_series} color="#3b82f6" highlightLast={isAnomaly} />
         </div>
         <div className="panel">

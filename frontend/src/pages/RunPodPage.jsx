@@ -14,8 +14,8 @@ function formatRuntime(seconds = 0) {
   return `${h}h ${m}m`;
 }
 
-export default function RunPodPage({ days = 30 }) {
-  const { data, loading, error } = useProvider("runpod", days);
+export default function RunPodPage({ days = 30, syncVersion = 0 }) {
+  const { data, loading, error } = useProvider("runpod", days, syncVersion);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -97,8 +97,7 @@ export default function RunPodPage({ days = 30 }) {
       <div className="two-col">
         <div className="panel panel--chart">
           <div className="panel-hdr">
-            <div className="panel-title">GPU spend · 30 days</div>
-            <div className="panel-stat" style={{ color: isAnomaly ? "var(--danger)" : "var(--t2)" }}>TODAY: {fmt(data.today)}</div>
+            <div className="panel-title">GPU spend · {days} days</div>
           </div>
           <DailyBarChart series={data.daily_series} color="#e879f9" highlightLast={isAnomaly} />
         </div>

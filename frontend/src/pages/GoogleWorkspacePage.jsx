@@ -7,8 +7,8 @@ import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
 
-export default function GoogleWorkspacePage({ days = 30 }) {
-  const { data, loading, error } = useProvider("gworkspace", days);
+export default function GoogleWorkspacePage({ days = 30, syncVersion = 0 }) {
+  const { data, loading, error } = useProvider("gworkspace", days, syncVersion);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
