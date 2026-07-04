@@ -4,6 +4,11 @@ const COLORS_BY_PROVIDER = {
   gads: ["var(--gads)", "#60a5fa", "#93c5fd", "#bfdbfe", "rgba(59,130,246,0.3)"],
 };
 
+function truncateLabel(name, maxLen = 12) {
+  if (!name) return "";
+  return name.length > maxLen ? name.slice(0, maxLen - 1) + "…" : name;
+}
+
 export default function BreakdownPanel({ provider, items = [], unit = "$", topLabel }) {
   const palette = COLORS_BY_PROVIDER[provider] || COLORS_BY_PROVIDER.aws;
   const top = items[0];
@@ -30,7 +35,9 @@ export default function BreakdownPanel({ provider, items = [], unit = "$", topLa
         </svg>
         <div className="donut-label">
           <div className="donut-pct" style={{ color: palette[0] }}>{topPct}%</div>
-          <div className="donut-sub">{topLabel || top?.name}</div>
+          <div className="donut-sub" title={topLabel || top?.name}>
+            {truncateLabel(topLabel || top?.name)}
+          </div>
         </div>
       </div>
       <div className="svc-list" style={{ flex: 1 }}>

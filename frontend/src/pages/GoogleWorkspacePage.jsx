@@ -56,6 +56,10 @@ export default function GoogleWorkspacePage({ days = 30, syncVersion = 0 }) {
           value={data.drive_events_today}
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
           deltaClass={deltaClass} />
+        <KpiCard accent="danger" label="Inactive seats" value={data.inactive_seats}
+          valueColor={data.inactive_seats > 0 ? "var(--danger)" : undefined}
+          delta={`${fmt(data.inactive_seat_cost)}/mo wasted`}
+          deltaClass={data.inactive_seats > 0 ? "d-up" : "d-flat"} />
       </div>
       <ExportButton data={data} filename="google_workspace_data.json" label="Export Details" />
 
@@ -76,6 +80,11 @@ export default function GoogleWorkspacePage({ days = 30, syncVersion = 0 }) {
           <div className="da-label">Cost per GB</div>
           <div className="da-val" style={{ color: "var(--teal)" }}>{fmt(data.cost_per_gb)}</div>
           <div className="da-sub">estimated storage efficiency</div>
+        </div>
+        <div className="da-card" data-accent="danger">
+          <div className="da-label">Cost per active user</div>
+          <div className="da-val" style={{ color: "var(--danger)" }}>{fmt(data.cost_per_active_user)}</div>
+          <div className="da-sub">vs {fmt(data.cost_per_seat)} per licensed seat</div>
         </div>
       </div>
 
@@ -113,6 +122,52 @@ export default function GoogleWorkspacePage({ days = 30, syncVersion = 0 }) {
                 No user data yet — Reports API may have a 2-day lag.
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="two-col">
+        <div className="panel">
+          <div className="panel-hdr">
+            <div className="panel-title">Top users by Gmail volume</div>
+            <div className="panel-stat">{data.total_emails_sent} emails sent total</div>
+          </div>
+          <div className="svc-list">
+            {(data.top_email_users || []).slice(0, 6).map((u, i) => {
+              const maxEmails = data.top_email_users?.[0]?.emails_sent || 1;
+              const pct = Math.round((u.emails_sent / maxEmails) * 100);
+              return (
+                <div key={i} className="svc-row">
+                  <div className="svc-name" title={u.email}>{u.email}</div>
+                  <div className="svc-track">
+                    <div className="svc-fill" style={{ width: `${pct}%`, background: "var(--ga)" }} />
+                  </div>
+                  <div className="svc-amt">{u.emails_sent}</div>
+                </div>
+              );
+            })}
+            {(!data.top_email_users || data.top_email_users.length === 0) && (
+              <div style={{ color: "var(--t3)", fontSize: 12 }}>No Gmail usage data yet.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-hdr">
+            <div className="panel-title">Storage split</div>
+          </div>
+          <div className="da-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <div className="da-card" data-accent="ga">
+              <div className="da-label">Personal Drive</div>
+              <div className="da-val" style={{ color: "var(--ga)" }}>{data.storage_split?.personal_drive_gb} GB</div>
+            </div>
+            <div className="da-card" data-accent="t3">
+              <div className="da-label">Shared Drive</div>
+              <div className="da-val" style={{ color: "var(--t3)" }}>
+                {data.storage_split?.shared_drive_gb ?? "—"}
+              </div>
+              <div className="da-sub">{data.storage_split?.note}</div>
+            </div>
           </div>
         </div>
       </div>

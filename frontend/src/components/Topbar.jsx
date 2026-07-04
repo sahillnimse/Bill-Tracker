@@ -41,16 +41,12 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }
           {syncing ? "Syncing…" : `Synced ${formattedTime}`}
         </span>
 
-        {/* ── Currency toggle ── */}
+        {/* ── Currency toggle (display only — conversion disabled) ── */}
         <button
           className="range-btn"
-          onClick={toggle}
-          title={
-            rateLoaded
-              ? `1 USD = ₹${rate.toFixed(2)} · click to switch`
-              : "Loading exchange rate…"
-          }
-          style={{ minWidth: 72, fontVariantNumeric: "tabular-nums" }}
+          onClick={() => { }}
+          title="Currency conversion is disabled"
+          style={{ minWidth: 72, fontVariantNumeric: "tabular-nums", cursor: "default", opacity: 0.7 }}
         >
           {currency === "USD" ? "$ USD" : "₹ INR"}
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>

@@ -58,6 +58,10 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
         <KpiCard accent="ms" label="Cost per user" value={fmt(data.cost_per_user)} delta="blended avg" deltaClass="d-flat" />
         <KpiCard accent="ms" label="MFA pending" value={data.mfa_pending} valueColor={data.mfa_pending > 0 ? "var(--warn)" : undefined}
           delta={data.mfa_pending > 0 ? "security risk" : "all enrolled"} deltaClass={data.mfa_pending > 0 ? "d-up" : "d-flat"} />
+        <KpiCard accent="danger" label="Inactive licensed seats" value={data.inactive_licensed_count}
+          valueColor={data.inactive_licensed_count > 0 ? "var(--danger)" : undefined}
+          delta={data.sign_in_activity_available ? `${fmt(data.inactive_monthly_waste)}/mo wasted` : "sign-in data unavailable"}
+          deltaClass={data.inactive_licensed_count > 0 ? "d-up" : "d-flat"} />
       </div>
       <ExportButton data={data} filename="ms365_data.json" label="Export Details" />
 
@@ -117,6 +121,76 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
           </table>
         )}
       </div>
+
+      {data.sign_in_activity_available && data.inactive_licensed_users?.length > 0 && (
+        <div className="panel">
+          <div className="panel-hdr">
+            <div className="panel-title">Inactive licensed seats</div>
+            <div className="panel-stat" style={{ color: "var(--danger)" }}>
+              {data.inactive_licensed_count} seats · {fmt(data.inactive_monthly_waste)}/mo
+            </div>
+          </div>
+          <table className="etable">
+            <thead>
+              <tr>
+                <th style={{ width: "24%" }}>Name</th>
+                <th style={{ width: "28%" }}>Email</th>
+                <th style={{ width: "18%" }}>Licence</th>
+                <th style={{ width: "18%" }}>Last sign-in</th>
+                <th style={{ width: "12%" }}>Cost/mo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.inactive_licensed_users.map((u, i) => (
+                <tr key={i}>
+                  <td style={{ color: "var(--t1)", fontWeight: 500 }}>{u.name}</td>
+                  <td style={{ fontSize: 11, fontFamily: "var(--mono)" }}>{u.email}</td>
+                  <td>{u.license}</td>
+                  <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{u.last_sign_in || "never"}</td>
+                  <td style={{ fontFamily: "var(--mono)" }}>{fmt(u.cost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!data.sign_in_activity_available && (
+        <div className="a-banner">
+          <div className="a-icon">i</div>
+          <div>
+            <div className="a-title">Inactive seat detection unavailable</div>
+            <div className="a-text">Requires AuditLog.Read.All permission on the Azure AD app registration to check sign-in activity.</div>
+          </div>
+        </div>
+      )}
+
+      {data.license_trend?.length > 0 && (
+        <div className="panel">
+          <div className="panel-hdr">
+            <div className="panel-title">License trend</div>
+            <div className="panel-stat">{data.license_trend.length} snapshots</div>
+          </div>
+          <table className="etable">
+            <thead>
+              <tr>
+                <th>Date</th><th>Total</th><th>Standard</th><th>Basic</th><th>Monthly bill</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.license_trend.map((row, i) => (
+                <tr key={i}>
+                  <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{row.date}</td>
+                  <td>{row.total_licenses}</td>
+                  <td>{row.standard_count}</td>
+                  <td>{row.basic_count}</td>
+                  <td style={{ fontFamily: "var(--mono)" }}>{fmt(row.monthly_bill)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <AnomalyHistory items={history} />
     </div>

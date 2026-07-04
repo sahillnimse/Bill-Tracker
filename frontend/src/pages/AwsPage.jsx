@@ -114,19 +114,37 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
         <div className="panel-hdr"><div className="panel-title">Commitment utilization</div></div>
         <div className="da-grid">
           <div className="da-card" data-accent="aws">
-            <div className="da-label">Savings Plans</div>
-            <div className="da-val" style={{ color: "var(--aws)" }}>{savingsPlans ? `${savingsPlans.utilization_pct}%` : "-"}</div>
-            <div className="da-sub">{savingsPlans ? `${fmt(savingsPlans.net_savings)} net savings` : "not available"}</div>
+            <div className="da-label">Savings Plans utilization</div>
+            <div className="da-val" style={{ color: "var(--aws)" }}>{savingsPlans ? `${savingsPlans.utilization_pct}%` : "0%"}</div>
+            <div className="da-sub">{savingsPlans ? `${fmt(savingsPlans.net_savings)} net savings` : "no active Savings Plans on this account"}</div>
+          </div>
+          <div className="da-card" data-accent="aws">
+            <div className="da-label">On-demand equivalent cost</div>
+            <div className="da-val" style={{ color: "var(--aws)" }}>{savingsPlans ? fmt(savingsPlans.on_demand_cost_equivalent) : "—"}</div>
+            <div className="da-sub">what this spend would cost without any commitment</div>
           </div>
           <div className="da-card" data-accent="violet">
-            <div className="da-label">Reserved Instances</div>
-            <div className="da-val" style={{ color: "var(--violet)" }}>{reservations ? `${reservations.utilization_pct}%` : "-"}</div>
-            <div className="da-sub">{reservations ? `${reservations.unused_hours} unused hours` : "not available"}</div>
+            <div className="da-label">Reserved Instance utilization</div>
+            <div className="da-val" style={{ color: "var(--violet)" }}>{reservations ? `${reservations.utilization_pct}%` : "0%"}</div>
+            <div className="da-sub">{reservations ? `${reservations.used_hours} / ${reservations.purchased_hours} hrs used` : "no active RIs on this account"}</div>
+          </div>
+          <div className="da-card" data-accent="violet">
+            <div className="da-label">Unused reserved hours</div>
+            <div className="da-val" style={{ color: reservations?.unused_hours > 0 ? "var(--danger)" : "var(--violet)" }}>
+              {reservations ? reservations.unused_hours : "—"}
+            </div>
+            <div className="da-sub">{reservations ? "paid for but not used this period" : "no RI purchase to track"}</div>
           </div>
           <div className="da-card" data-accent="teal">
-            <div className="da-label">Coverage note</div>
-            <div className="da-val" style={{ color: "var(--teal)" }}>{data.commitment_utilization?.notes?.length || 0}</div>
-            <div className="da-sub">{data.commitment_utilization?.notes?.join(" - ") || "all commitment APIs responded"}</div>
+            <div className="da-label">Coverage status</div>
+            <div className="da-val" style={{ color: "var(--teal)" }}>
+              {!savingsPlans && !reservations ? "Pay-as-you-go" : "Mixed"}
+            </div>
+            <div className="da-sub">
+              {data.commitment_utilization?.notes?.length
+                ? data.commitment_utilization.notes.join(" · ")
+                : "No Savings Plans or Reserved Instances purchased — 100% on-demand pricing."}
+            </div>
           </div>
         </div>
       </div>
