@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useCurrency } from "../context/CurrencyContext";
 
 const RANGES = [
   { label: "7 days", days: 7 },
@@ -11,7 +10,6 @@ const RANGES = [
 export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }) {
   const [open, setOpen] = useState(false);
   const dropRef = useRef(null);
-  const { currency, toggle, rate, rateLoaded } = useCurrency();
 
   const formattedTime = syncedAt
     ? new Date(syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
@@ -41,17 +39,14 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }
           {syncing ? "Syncing…" : `Synced ${formattedTime}`}
         </span>
 
-        {/* ── Currency toggle (display only — conversion disabled) ── */}
+        {/* ── Currency indicator (always INR — conversion disabled) ── */}
         <button
-          className="range-btn"
-          onClick={() => { }}
-          title="Currency conversion is disabled"
-          style={{ minWidth: 72, fontVariantNumeric: "tabular-nums", cursor: "default", opacity: 0.7 }}
+          className="range-btn range-btn--disabled"
+          disabled
+          title="INR pricing is hardcoded for Microsoft 365 — conversion disabled"
+          style={{ minWidth: 72, fontVariantNumeric: "tabular-nums" }}
         >
-          {currency === "USD" ? "$ USD" : "₹ INR"}
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-            <path d="M5 1v8M2 4l3-3 3 3M2 6l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          ₹ INR
         </button>
 
         {/* ── Time-range dropdown ── */}

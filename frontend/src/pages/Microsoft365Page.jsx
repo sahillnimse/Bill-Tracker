@@ -3,7 +3,6 @@ import AnomalyHistory from "../components/AnomalyHistory";
 import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
-import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
 
 export default function Microsoft365Page({ syncVersion = 0 }) {
