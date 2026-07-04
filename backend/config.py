@@ -61,10 +61,9 @@ class Microsoft365Config:
 
     # USD list prices (source of truth, backend always computes in USD).
     # Updated to Microsoft's July 1, 2026 US list pricing.
-    basic_license_cost: float = _get_float("MS365_BASIC_LICENSE_COST", 7.0)      # was 6.0
-    standard_license_cost: float = _get_float("MS365_STANDARD_LICENSE_COST", 14.0)  # new tier, was missing
-    premium_license_cost: float = _get_float("MS365_PREMIUM_LICENSE_COST", 22.0)    # unchanged
-
+    basic_license_cost: float = _get_float("MS365_BASIC_LICENSE_COST", 170.0)      # INR, Business Basic (paid yearly)
+    standard_license_cost: float = _get_float("MS365_STANDARD_LICENSE_COST", 830.0)  # INR, Apps for business (paid yearly)
+    premium_license_cost: float = _get_float("MS365_PREMIUM_LICENSE_COST", 830.0)    # INR, same as standard unless you have a 3rd tier
 
 @dataclass(frozen=True)
 class GoogleWorkspaceConfig:

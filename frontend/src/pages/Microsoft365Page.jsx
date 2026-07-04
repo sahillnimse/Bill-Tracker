@@ -9,7 +9,7 @@ import ExportButton from "../components/ExportButton";
 export default function Microsoft365Page({ syncVersion = 0 }) {
   const { data, loading, error } = useProvider("ms365", 30, syncVersion);
   const [history, setHistory] = useState([]);
-  const { fmt } = useCurrency();
+  const fmt = (n) => `₹${Number(n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
   useEffect(() => {
     api.getAnomalies("ms365").then(setHistory).catch(() => { });
