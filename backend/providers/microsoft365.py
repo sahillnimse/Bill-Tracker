@@ -111,6 +111,31 @@ def _last_week_snapshot() -> dict[str, Any] | None:
     return {"total_licenses": row[0], "monthly_bill": row[1]}
 
 
+def _license_trend(days: int = 90) -> list[dict[str, Any]]:
+    _ensure_snapshot_table()
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT date, total_licenses, premium_count, basic_count, monthly_bill
+            FROM ms365_license_snapshot
+            WHERE date >= ?
+            ORDER BY date ASC
+            """,
+            (cutoff,),
+        ).fetchall()
+    return [
+        {
+            "date": row[0],
+            "total_licenses": row[1],
+            "standard_count": row[2],
+            "basic_count": row[3],
+            "monthly_bill": row[4],
+        }
+        for row in rows
+    ]
+
+
 def _build_tier_map(skus: list[dict[str, Any]]) -> dict[str, tuple[str, str, float]]:
     """
     Explicit mapping by skuPartNumber — no more guessing by seat count.
@@ -200,19 +225,37 @@ def fetch_ms365_data() -> dict[str, Any]:
     _record_snapshot(total_licenses, standard_count, basic_count, monthly_bill)
 
     # ALL users, not just recent 10 — sorted by creation date desc, with licence + job title
-    users_resp = _graph_get(
-        token,
-        "/users",
-        params={
-            "$select": "displayName,mail,userPrincipalName,createdDateTime,id,jobTitle",
-            "$orderby": "createdDateTime desc",
-            "$top": "999",
-            "$count": "true",
-        },
-        extra_headers={"ConsistencyLevel": "eventual"},
-    )
+    try:
+        users_resp = _graph_get(
+            token,
+            "/users",
+            params={
+                "$select": "displayName,mail,userPrincipalName,createdDateTime,id,jobTitle,signInActivity",
+                "$orderby": "createdDateTime desc",
+                "$top": "999",
+                "$count": "true",
+            },
+            extra_headers={"ConsistencyLevel": "eventual"},
+        )
+        sign_in_available = True
+    except httpx.HTTPStatusError:
+        logger.warning("signInActivity unavailable (needs AuditLog.Read.All); retrying users without it")
+        users_resp = _graph_get(
+            token,
+            "/users",
+            params={
+                "$select": "displayName,mail,userPrincipalName,createdDateTime,id,jobTitle",
+                "$orderby": "createdDateTime desc",
+                "$top": "999",
+                "$count": "true",
+            },
+            extra_headers={"ConsistencyLevel": "eventual"},
+        )
+        sign_in_available = False
 
     recent_users = []
+    inactive_licensed_users = []
+    inactive_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     for u in users_resp.get("value", []):
         created = u.get("createdDateTime", "")
         user_id = u.get("id")
@@ -233,6 +276,33 @@ def fetch_ms365_data() -> dict[str, Any]:
         except httpx.HTTPStatusError:
             logger.warning("Could not fetch licenseDetails for user %s", user_id)
 
+        sign_in = u.get("signInActivity") or {}
+        last_sign_in = sign_in.get("lastSuccessfulSignInDateTime") or sign_in.get("lastSignInDateTime")
+        inactive_days = None
+        is_inactive = False
+        if sign_in_available and license_cost > 0:
+            if last_sign_in:
+                try:
+                    last_dt = datetime.fromisoformat(last_sign_in.replace("Z", "+00:00"))
+                    inactive_days = int((datetime.now(timezone.utc) - last_dt).total_seconds() / 86400)
+                    is_inactive = last_dt < inactive_cutoff
+                except (TypeError, ValueError):
+                    is_inactive = True
+            else:
+                is_inactive = True
+
+        if is_inactive:
+            inactive_licensed_users.append(
+                {
+                    "name": u.get("displayName"),
+                    "email": u.get("mail") or u.get("userPrincipalName"),
+                    "license": ", ".join(license_names) if license_names else "Licensed",
+                    "cost": round(license_cost, 2),
+                    "last_sign_in": last_sign_in,
+                    "inactive_days": inactive_days,
+                }
+            )
+
         recent_users.append(
             {
                 "name": u.get("displayName"),
@@ -241,6 +311,8 @@ def fetch_ms365_data() -> dict[str, Any]:
                 "created": created[:10] if created else None,
                 "license": ", ".join(license_names) if license_names else "Unlicensed",
                 "cost": round(license_cost, 2),
+                "last_sign_in": last_sign_in,
+                "inactive_days": inactive_days,
             }
         )
 
@@ -255,6 +327,8 @@ def fetch_ms365_data() -> dict[str, Any]:
     last_week = _last_week_snapshot()
     new_ids_7d = (total_licenses - last_week["total_licenses"]) if last_week else 0
     bill_change = (monthly_bill - last_week["monthly_bill"]) if last_week else 0.0
+    inactive_licensed_users.sort(key=lambda u: u["cost"], reverse=True)
+    inactive_monthly_waste = round(sum(u["cost"] for u in inactive_licensed_users), 2)
 
     return {
         "provider": "ms365",
@@ -270,5 +344,10 @@ def fetch_ms365_data() -> dict[str, Any]:
         "new_ids_7d": new_ids_7d,
         "bill_change_vs_last_week": round(bill_change, 2),
         "mfa_pending": mfa_pending,
+        "inactive_licensed_count": len(inactive_licensed_users),
+        "inactive_monthly_waste": inactive_monthly_waste,
+        "inactive_licensed_users": inactive_licensed_users[:12],
+        "sign_in_activity_available": sign_in_available,
+        "license_trend": _license_trend(),
         "recent_users": recent_users,
     }

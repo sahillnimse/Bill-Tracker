@@ -94,6 +94,7 @@ def _get_user_usage(days: int) -> dict[str, Any]:
 
     total_storage_gb = 0.0
     active_users = 0
+    total_emails_sent = 0
     top_users: list[dict] = []
 
     try:
@@ -117,14 +118,15 @@ def _get_user_usage(days: int) -> dict[str, Any]:
             items_created = int(params.get("drive:num_items_created", 0) or 0)
 
             total_storage_gb += storage_gb
+            total_emails_sent += emails_sent
             if emails_sent > 0 or items_created > 0:
                 active_users += 1
-                top_users.append({
-                    "email": email,
-                    "storage_gb": storage_gb,
-                    "emails_sent": emails_sent,
-                    "items_created": items_created,
-                })
+            top_users.append({
+                "email": email,
+                "storage_gb": storage_gb,
+                "emails_sent": emails_sent,
+                "items_created": items_created,
+            })
 
         top_users.sort(key=lambda u: u["storage_gb"], reverse=True)
         top_users = top_users[:8]
@@ -135,7 +137,9 @@ def _get_user_usage(days: int) -> dict[str, Any]:
     return {
         "total_storage_gb": round(total_storage_gb, 2),
         "active_users": active_users,
+        "total_emails_sent": total_emails_sent,
         "top_users": top_users,
+        "top_email_users": sorted(top_users, key=lambda u: u["emails_sent"], reverse=True)[:8],
     }
 
 
@@ -155,6 +159,9 @@ def fetch_gworkspace_data(days: int = 30) -> dict[str, Any]:
     cost_per_seat = gworkspace_config.cost_per_seat
     monthly_cost = round(seats * cost_per_seat, 2)
     cost_per_gb = round(monthly_cost / max(user_data["total_storage_gb"], 1), 4)
+    inactive_seats = max(seats - user_data["active_users"], 0)
+    inactive_seat_cost = round(inactive_seats * cost_per_seat, 2)
+    cost_per_active_user = round(monthly_cost / max(user_data["active_users"], 1), 2)
 
     today_activity = values[-1] if values else 0.0
     avg_activity = round(sum(values) / len(values), 1) if values else 0.0
@@ -164,13 +171,23 @@ def fetch_gworkspace_data(days: int = 30) -> dict[str, Any]:
         "seats": seats,
         "monthly_cost": monthly_cost,
         "cost_per_seat": cost_per_seat,
+        "cost_per_active_user": cost_per_active_user,
         "cost_per_gb": cost_per_gb,
         "total_storage_gb": user_data["total_storage_gb"],
         "active_users": user_data["active_users"],
+        "inactive_seats": inactive_seats,
+        "inactive_seat_cost": inactive_seat_cost,
+        "total_emails_sent": user_data["total_emails_sent"],
         "drive_events_today": today_activity,
         "avg_drive_events_per_day": avg_activity,
         "daily_series": drive_series,
         "top_users": user_data["top_users"],
+        "top_email_users": user_data["top_email_users"],
+        "storage_split": {
+            "personal_drive_gb": user_data["total_storage_gb"],
+            "shared_drive_gb": None,
+            "note": "Shared drive storage split is not available from the current Reports API pull.",
+        },
         "domain": gworkspace_config.domain,
         "anomaly": anomaly.__dict__,
     }
