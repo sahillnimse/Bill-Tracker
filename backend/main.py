@@ -9,8 +9,9 @@ Run with:
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -98,6 +99,7 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
             "_error": error_msg,
         }
     elif provider_key == "runpod":
+        runpod_billing_error = "Unable to verify billing data — check RunPod API key configuration."
         return {
             "provider": "runpod",
             "today": 0.0,
@@ -110,6 +112,7 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
             "anomaly": default_anomaly,
             "_status": "error",
             "_error": error_msg,
+            "empty_data_reason": runpod_billing_error,
         }
     elif provider_key == "google_ads":
         return {
@@ -130,8 +133,11 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
             "total_licenses": 0,
             "monthly_bill": 0.0,
             "cost_per_user": 0.0,
-            "premium_count": 0,
+            "standard_count": 0,
             "basic_count": 0,
+            "free_count": 0,
+            "basic_cost_per_user": 0.0,
+            "standard_cost_per_user": 0.0,
             "new_ids_7d": 0,
             "bill_change_vs_last_week": 0.0,
             "mfa_pending": 0,
@@ -213,6 +219,21 @@ def _get_provider_data(provider_key: str, force_refresh: bool = False, days: int
             return cached
     return _fetch_and_cache(provider_key, days=days)
 
+def _fetch_all_parallel(fn: Callable[[str], dict[str, Any]]) -> dict[str, Any]:
+    """
+    Run `fn(provider_key)` for every provider concurrently on a thread pool.
+    """
+    results: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=len(PROVIDERS)) as pool:
+        future_to_key = {pool.submit(fn, key): key for key in PROVIDERS}
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                results[key] = future.result()
+            except Exception as exc:
+                logger.exception("Unhandled error fetching %s", key)
+                results[key] = _get_empty_provider_data(key, str(exc))
+    return results
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
@@ -222,8 +243,7 @@ def health() -> dict[str, str]:
 @app.get("/api/overview")
 def overview(days: int = 30) -> dict[str, Any]:
     """Aggregated snapshot across all providers for the Overview page."""
-    data = {key: _get_provider_data(key, days=days) for key in PROVIDERS}
-
+    data = _fetch_all_parallel(lambda key: _get_provider_data(key, days=days))
     today_total = sum(d.get("today", 0) or 0 for k, d in data.items() if k not in {"gworkspace"})
     mtd_total = sum(d.get("month_to_date", 0) or d.get("monthly_cost", 0) or 0 for k, d in data.items())
     anomalies = [
@@ -255,11 +275,8 @@ def provider_detail(provider_key: str, days: int = 30) -> dict[str, Any]:
 @app.post("/api/sync")
 def sync_all(days: int = 30) -> dict[str, Any]:
     """Force a fresh pull from every provider's live API."""
-    results = {}
-    for key in PROVIDERS:
-        results[key] = _fetch_and_cache(key, days=days)
+    results = _fetch_all_parallel(lambda key: _fetch_and_cache(key, days=days))
     return {"synced_at": datetime.now(timezone.utc).isoformat(), "providers": results}
-
 
 @app.post("/api/sync/{provider_key}")
 def sync_provider(provider_key: str, days: int = 30) -> dict[str, Any]:
