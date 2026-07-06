@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useCurrency } from "../context/CurrencyContext";
 
 const RANGES = [
   { label: "7 days", days: 7 },
@@ -7,9 +8,10 @@ const RANGES = [
   { label: "6 months", days: 180 },
 ];
 
-export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }) {
+export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange, children }) {
   const [open, setOpen] = useState(false);
   const dropRef = useRef(null);
+  const { currency, toggle, rate, rateLoaded } = useCurrency();
 
   const formattedTime = syncedAt
     ? new Date(syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
@@ -39,14 +41,21 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }
           {syncing ? "Syncing…" : `Synced ${formattedTime}`}
         </span>
 
-        {/* ── Currency indicator (always INR — conversion disabled) ── */}
+        {/* ── Currency toggle — works everywhere except MS365 (that page ignores it) ── */}
         <button
-          className="range-btn range-btn--disabled"
-          disabled
-          title="INR pricing is hardcoded for Microsoft 365 — conversion disabled"
+          className="range-btn"
+          onClick={toggle}
+          title={
+            rateLoaded
+              ? `1 USD = ₹${rate.toFixed(2)} · click to switch (no effect on Microsoft 365 page)`
+              : "Loading exchange rate…"
+          }
           style={{ minWidth: 72, fontVariantNumeric: "tabular-nums" }}
         >
-          ₹ INR
+          {currency === "USD" ? "$ USD" : "₹ INR"}
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M5 1v8M2 4l3-3 3 3M2 6l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
 
         {/* ── Time-range dropdown ── */}
@@ -89,6 +98,8 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange }
             </div>
           )}
         </div>
+
+        {children}
       </div>
     </div>
   );

@@ -13,10 +13,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+import auth
+from config import auth_config
 from cache import (
     cleanup_old_anomalies,
     get_anomaly_history,
@@ -50,6 +53,59 @@ app.add_middleware(
 )
 
 init_db()
+
+
+# ── Auth routes (no login required to hit these — they ARE the login flow) ──
+@app.get("/api/auth/login")
+def auth_login():
+    url = auth.build_authorize_url()
+    return RedirectResponse(url)
+
+
+@app.get("/api/auth/callback")
+def auth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+    if error:
+        return RedirectResponse(f"{auth_config.frontend_url}/?login_error={error}")
+    if not code:
+        return RedirectResponse(f"{auth_config.frontend_url}/?login_error=missing_code")
+
+    auth.validate_state(state)
+    session_token = auth.verify_tenant_and_issue_session(code)
+
+    resp = RedirectResponse(auth_config.frontend_url)
+    resp.set_cookie(
+        key=auth.SESSION_COOKIE_NAME,
+        value=session_token,
+        httponly=True,
+        samesite="lax",
+        max_age=auth_config.session_ttl_hours * 3600,
+    )
+    return resp
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    resp = RedirectResponse(auth_config.frontend_url)
+    resp.delete_cookie(auth.SESSION_COOKIE_NAME)
+    return resp
+
+
+@app.get("/api/auth/me")
+def auth_me(session: dict = Depends(auth.require_session)):
+    return auth.get_current_user(session)
+
+
+# ── Global guard: every /api/* route below requires a valid Xarka session,
+# except the ones already defined above (health check + the auth flow
+# itself, which obviously can't require you to already be logged in). ──
+@app.middleware("http")
+async def enforce_auth(request: Request, call_next):
+    # TEMP: auth enforcement disabled until Azure admin consent is granted.
+    return await call_next(request)
+
+def _json_401():
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=401, content={"detail": "Not signed in."})
 
 PROVIDERS = {
     "aws": aws_provider.fetch_aws_data,

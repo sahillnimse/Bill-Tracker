@@ -8,6 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 const client = axios.create({
   baseURL: API_BASE_URL,
   timeout: 500000,
+  withCredentials: true, // send/receive the session cookie set by /api/auth/callback
 });
 
 const realApi = {
@@ -27,6 +28,8 @@ const realApi = {
   getAwsInstances: () => client.get("/aws/instances").then((r) => r.data),
   getAwsUsageBreakdown: (days = 30) =>
     client.get("/aws/usage-breakdown", { params: { days } }).then((r) => r.data),
+  getMe: () => client.get("/auth/me").then((r) => r.data),
+  logout: () => client.post("/auth/logout").then((r) => r.data),
 };
 
 export const api = realApi;

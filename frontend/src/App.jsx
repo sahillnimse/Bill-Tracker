@@ -11,6 +11,9 @@ import GoogleWorkspacePage from "./pages/GoogleWorkspacePage";
 import SettingsPage from "./pages/SettingsPage";
 import { useOverview } from "./hooks/useProviderData";
 import { CurrencyProvider } from "./context/CurrencyContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import ProfileMenu from "./components/ProfileMenu";
 import "./App.css";
 
 function badgesFromOverview(overview) {
@@ -48,7 +51,9 @@ function AppShell() {
           syncing={syncing}
           days={days}
           onDaysChange={setDays}
-        />
+        >
+          <ProfileMenu />
+        </Topbar>
         <div className="content">
           <Routes>
             <Route path="/" element={<Overview overview={overview} loading={loading} error={error} />} />
@@ -65,12 +70,22 @@ function AppShell() {
   );
 }
 
+function Gate() {
+  // TEMP: auth gate disabled until Azure admin consent is granted.
+  // Re-enable by restoring the isAuthenticated/loading check below.
+  return (
+    <CurrencyProvider>
+      <AppShell />
+    </CurrencyProvider>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <CurrencyProvider>
-        <AppShell />
-      </CurrencyProvider>
+      <AuthProvider>
+        <Gate />
+      </AuthProvider>
     </BrowserRouter>
   );
 }

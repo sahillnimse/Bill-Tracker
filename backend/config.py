@@ -59,11 +59,27 @@ class Microsoft365Config:
     client_id: str = _get("MS365_CLIENT_ID")
     client_secret: str = _get("MS365_CLIENT_SECRET")
 
-    # USD list prices (source of truth, backend always computes in USD).
-    # Updated to Microsoft's July 1, 2026 US list pricing.
     basic_license_cost: float = _get_float("MS365_BASIC_LICENSE_COST", 170.0)      # INR, Business Basic (paid yearly)
     standard_license_cost: float = _get_float("MS365_STANDARD_LICENSE_COST", 830.0)  # INR, Apps for business (paid yearly)
     premium_license_cost: float = _get_float("MS365_PREMIUM_LICENSE_COST", 830.0)    # INR, same as standard unless you have a 3rd tier
+
+
+@dataclass(frozen=True)
+class AuthConfig:
+    # Reuses the same Azure AD app registration as MS365Config by default —
+    # just needs a Web platform redirect URI + delegated User.Read permission
+    # added on top of the existing app-only permissions. Can be split into a
+    # separate app registration later by setting these independently.
+    tenant_id: str = _get("AUTH_TENANT_ID") or _get("MS365_TENANT_ID")
+    client_id: str = _get("AUTH_CLIENT_ID") or _get("MS365_CLIENT_ID")
+    client_secret: str = _get("AUTH_CLIENT_SECRET") or _get("MS365_CLIENT_SECRET")
+    redirect_uri: str = _get("AUTH_REDIRECT_URI", "http://localhost:8000/api/auth/callback")
+    frontend_url: str = _get("AUTH_FRONTEND_URL", "http://localhost:5173")
+    # Secret used to sign our own session cookie (JWT) after login succeeds.
+    # MUST be set to a long random value in .env for production use.
+    session_secret: str = _get("AUTH_SESSION_SECRET", "dev-only-insecure-secret-change-me")
+    session_ttl_hours: int = _get_int("AUTH_SESSION_TTL_HOURS", 24 * 7)  # 1 week
+
 
 @dataclass(frozen=True)
 class GoogleWorkspaceConfig:
@@ -94,6 +110,7 @@ aws_config = AWSConfig()
 runpod_config = RunPodConfig()
 google_ads_config = GoogleAdsConfig()
 ms365_config = Microsoft365Config()
+auth_config = AuthConfig()
 gworkspace_config = GoogleWorkspaceConfig()
 smtp_config = SMTPConfig()
 app_config = AppConfig()
