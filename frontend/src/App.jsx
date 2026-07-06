@@ -71,8 +71,20 @@ function AppShell() {
 }
 
 function Gate() {
-  // TEMP: auth gate disabled until Azure admin consent is granted.
-  // Re-enable by restoring the isAuthenticated/loading check below.
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3, #888)" }}>
+        Checking session…
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
     <CurrencyProvider>
       <AppShell />

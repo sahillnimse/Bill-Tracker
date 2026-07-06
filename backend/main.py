@@ -100,7 +100,24 @@ def auth_me(session: dict = Depends(auth.require_session)):
 # itself, which obviously can't require you to already be logged in). ──
 @app.middleware("http")
 async def enforce_auth(request: Request, call_next):
-    # TEMP: auth enforcement disabled until Azure admin consent is granted.
+    open_paths = {
+        "/api/health",
+        "/api/auth/login",
+        "/api/auth/callback",
+        "/api/auth/logout",
+    }
+    if request.url.path in open_paths or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    cookie = request.cookies.get(auth.SESSION_COOKIE_NAME)
+    if not cookie:
+        return _json_401()
+    try:
+        import jwt as _jwt
+        _jwt.decode(cookie, auth_config.session_secret, algorithms=["HS256"])
+    except Exception:
+        return _json_401()
+
     return await call_next(request)
 
 def _json_401():
