@@ -58,7 +58,11 @@ init_db()
 # ── Auth routes (no login required to hit these — they ARE the login flow) ──
 @app.get("/api/auth/login")
 def auth_login():
-    url = auth.build_authorize_url()
+    try:
+        url = auth.build_authorize_url()
+    except RuntimeError:
+        logger.exception("Auth misconfigured — missing tenant/client credentials")
+        return RedirectResponse(f"{auth_config.frontend_url}/?login_error=invalid_client")
     return RedirectResponse(url)
 
 

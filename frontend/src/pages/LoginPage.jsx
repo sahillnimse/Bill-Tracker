@@ -29,6 +29,14 @@ const STATS = [
     { value: "Live", label: "anomaly detection", color: "var(--ok)", isNumber: false },
 ];
 
+const ACTIVITY_LINES = [
+    "AWS Cost Explorer synced",
+    "RunPod billing polled",
+    "Google Ads spend checked",
+    "Microsoft 365 seats verified",
+    "Workspace storage scanned",
+];
+
 function useCountUp(target, isNumber, durationMs = 700) {
     const [display, setDisplay] = useState(isNumber ? 0 : target);
 
@@ -50,6 +58,15 @@ function useCountUp(target, isNumber, durationMs = 700) {
     }, [target, isNumber, durationMs]);
 
     return display;
+}
+
+function useRotatingIndex(length, intervalMs = 2600) {
+    const [index, setIndex] = useState(0);
+    useEffect(() => {
+        const id = setInterval(() => setIndex((i) => (i + 1) % length), intervalMs);
+        return () => clearInterval(id);
+    }, [length, intervalMs]);
+    return index;
 }
 
 function ParticleField() {
@@ -155,137 +172,144 @@ function StatCard({ stat }) {
     );
 }
 
+function ActivityTicker() {
+    const index = useRotatingIndex(ACTIVITY_LINES.length);
+    return (
+        <div className="login-ticker">
+            <span className="login-ticker-dot" />
+            <span className="login-ticker-text" key={index}>{ACTIVITY_LINES[index]}</span>
+        </div>
+    );
+}
+
 function MarketingPanel() {
+    return (
+        <div className="login-panel login-panel--left">
+            <div className="login-panel-grid" />
+            <ParticleField />
+            <div className="login-glow login-glow-a" />
 
-    function MarketingPanel() {
-        return (
-            <div className="login-panel login-panel--left">
-                <div className="login-panel-grid" />
-                <ParticleField />
-                <div className="login-glow login-glow-a" />
-
-                <div className="login-panel-content">
-                    <div className="login-brand-row">
-                        <div className="login-mark login-mark--sm">
-                            <span className="login-mark-glyph">S</span>
-                        </div>
-                        <span className="login-brand-name login-brand-name--sm">SpendWatch</span>
-                    </div>
-
-                    <h1 className="login-headline">
-                        Every dollar you spend
-                        <br />
-                        on tools, in one ledger.
-                    </h1>
-
-                    <p className="login-tagline">
-                        AWS, RunPod, Google Ads, Microsoft 365, and Google Workspace —
-                        tracked live, cross-checked for anomalies, built for Xarka.
-                    </p>
-
-                    <div className="login-providers">
-                        {PROVIDERS.map((p, i) => (
-                            <div key={p.key} className="login-chip" style={{ animationDelay: `${0.3 + i * 0.07}s` }}>
-                                <span className="login-chip-dot" style={{ background: p.color, boxShadow: `0 0 0 3px ${p.color}22` }} />
-                                {p.label}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="login-stats">
-                        {STATS.map((s) => (
-                            <StatCard key={s.label} stat={s} />
-                        ))}
-                    </div>
-
-                    <div className="login-sync-row">
-                        <span className="login-sync-dot" />
-                        Live sync active — every provider polled continuously
-                    </div>
-                </div>
-
-                <div className="login-corner-label login-corner-label--left">XARKA AI TECHNOLOGIES</div>
-            </div>
-        );
-    }
-
-    function SignInPanel() {
-        const { login } = useAuth();
-
-        const errorMessage = useMemo(() => {
-            const params = new URLSearchParams(window.location.search);
-            return getErrorMessage(params.get("login_error"));
-        }, []);
-
-        return (
-            <div className="login-panel login-panel--right">
-                <div className="login-panel-grid" />
-                <div className="login-glow login-glow-b" />
-                <div className="login-card">
-                    <div className="login-card-border" />
-
-                    <div className="login-mark">
+            <div className="login-panel-content">
+                <div className="login-brand-row">
+                    <div className="login-mark login-mark--sm">
                         <span className="login-mark-glyph">S</span>
                     </div>
-
-                    <div className="login-brand">
-                        <span className="login-brand-name">Sign in to SpendWatch</span>
-                        <span className="login-brand-sub">Use your Xarka Microsoft 365 account to continue.</span>
-                    </div>
-
-                    {errorMessage && (
-                        <div className="login-error">
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="login-error-icon">
-                                <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3" />
-                                <path d="M7 4v3.5M7 9.5h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                            </svg>
-                            <span>{errorMessage}</span>
-                        </div>
-                    )}
-
-                    <button className="login-btn" onClick={login}>
-                        <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true">
-                            <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-                            <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-                            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-                        </svg>
-                        <span>Sign in with Microsoft</span>
-                        <svg className="login-btn-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M3 7h8M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-
-                    <div className="login-hint">You'll be redirected to Microsoft, then straight to your dashboard.</div>
-
-                    <svg className="login-ekg" viewBox="0 0 400 40" preserveAspectRatio="none">
-                        <polyline
-                            className="login-ekg-line"
-                            fill="none"
-                            stroke="var(--accent)"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points="0,20 40,20 54,20 62,4 70,36 78,20 96,20 120,20 132,20 140,8 148,32 156,20 172,20 400,20"
-                        />
-                    </svg>
-
-                    <div className="login-footnote">
-                        <span className="login-dot" />
-                        Restricted to Xarka's Microsoft 365 organization
-                    </div>
+                    <span className="login-brand-name login-brand-name--sm">SpendWatch</span>
                 </div>
 
-                <div className="login-corner-label login-corner-label--right">SPENDWATCH . INTERNAL</div>
-            </div>
-        );
-    }
+                <h1 className="login-headline">
+                    Every dollar you spend
+                    <br />
+                    on tools, in one ledger.
+                </h1>
 
-    export default function LoginPage() {
-        return (
-            <div className="login-screen login-screen--split">
-                <MarketingPanel />
-                <SignInPanel />
+                <p className="login-tagline">
+                    AWS, RunPod, Google Ads, Microsoft 365, and Google Workspace -
+                    tracked live, cross-checked for anomalies, built for Xarka.
+                </p>
+
+                <div className="login-providers">
+                    {PROVIDERS.map((p, i) => (
+                        <div key={p.key} className="login-chip" style={{ animationDelay: `${0.3 + i * 0.07}s` }}>
+                            <span className="login-chip-dot" style={{ background: p.color, boxShadow: `0 0 0 3px ${p.color}22` }} />
+                            {p.label}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="login-divider" />
+
+                <div className="login-stats">
+                    {STATS.map((s) => (
+                        <StatCard key={s.label} stat={s} />
+                    ))}
+                </div>
+
+                <ActivityTicker />
             </div>
-        );
-    }
+
+            <div className="login-corner-label login-corner-label--left">XARKA AI TECHNOLOGIES</div>
+        </div>
+    );
+}
+
+function SignInPanel() {
+    const { login } = useAuth();
+
+    const errorMessage = useMemo(() => {
+        const params = new URLSearchParams(window.location.search);
+        return getErrorMessage(params.get("login_error"));
+    }, []);
+
+    return (
+        <div className="login-panel login-panel--right">
+            <div className="login-panel-grid" />
+            <div className="login-glow login-glow-b" />
+            <div className="login-card">
+                <div className="login-card-border" />
+
+                <div className="login-mark">
+                    <span className="login-mark-glyph">S</span>
+                </div>
+
+                <div className="login-brand">
+                    <span className="login-brand-name">Sign in to SpendWatch</span>
+                    <span className="login-brand-sub">Use your Xarka Microsoft 365 account to continue.</span>
+                </div>
+
+                {errorMessage && (
+                    <div className="login-error">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="login-error-icon">
+                            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3" />
+                            <path d="M7 4v3.5M7 9.5h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
+                        <span>{errorMessage}</span>
+                    </div>
+                )}
+
+                <button className="login-btn" onClick={login}>
+                    <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true">
+                        <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                        <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                        <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                    </svg>
+                    <span>Sign in with Microsoft</span>
+                    <svg className="login-btn-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M3 7h8M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </button>
+
+                <div className="login-hint">You'll be redirected to Microsoft, then straight to your dashboard.</div>
+
+                <svg className="login-ekg" viewBox="0 0 400 40" preserveAspectRatio="none">
+                    <polyline
+                        className="login-ekg-line"
+                        fill="none"
+                        stroke="var(--accent)"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points="0,20 40,20 54,20 62,4 70,36 78,20 96,20 120,20 132,20 140,8 148,32 156,20 172,20 400,20"
+                    />
+                </svg>
+
+                <div className="login-footnote">
+                    <span className="login-dot" />
+                    Restricted to Xarka's Microsoft 365 organization
+                </div>
+            </div>
+
+            <div className="login-corner-label login-corner-label--right">SPENDWATCH . INTERNAL</div>
+        </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <div className="login-screen login-screen--split">
+            <MarketingPanel />
+            <SignInPanel />
+        </div>
+    );
+}

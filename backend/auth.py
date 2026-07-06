@@ -105,7 +105,15 @@ def _exchange_code_for_claims(code: str) -> dict[str, Any]:
 
 def _fetch_profile(access_token: str | None) -> dict[str, Any]:
     """Best-effort fetch of richer profile fields (title, department, photo) via Graph /me."""
-    profile: dict[str, Any] = {"job_title": None, "department": None, "photo_data_url": None}
+    profile: dict[str, Any] = {
+        "job_title": None,
+        "department": None,
+        "office_location": None,
+        "mobile_phone": None,
+        "employee_id": None,
+        "manager_name": None,
+        "photo_data_url": None,
+    }
     if not access_token:
         return profile
 
@@ -114,7 +122,10 @@ def _fetch_profile(access_token: str | None) -> dict[str, Any]:
         resp = httpx.get(
             "https://graph.microsoft.com/v1.0/me",
             headers=headers,
-            params={"$select": "jobTitle,department,mail,userPrincipalName,displayName,officeLocation"},
+            params={
+                "$select": "jobTitle,department,mail,userPrincipalName,displayName,"
+                           "officeLocation,mobilePhone,employeeId"
+            },
             timeout=10,
         )
         if resp.status_code == 200:
@@ -122,8 +133,23 @@ def _fetch_profile(access_token: str | None) -> dict[str, Any]:
             profile["job_title"] = data.get("jobTitle")
             profile["department"] = data.get("department")
             profile["office_location"] = data.get("officeLocation")
+            profile["mobile_phone"] = data.get("mobilePhone")
+            profile["employee_id"] = data.get("employeeId")
     except Exception as exc:
         logger.warning("Graph /me profile fetch failed: %s", exc)
+
+    # Manager is a separate Graph relationship, not a /me field.
+    try:
+        mgr_resp = httpx.get(
+            "https://graph.microsoft.com/v1.0/me/manager",
+            headers=headers,
+            params={"$select": "displayName"},
+            timeout=10,
+        )
+        if mgr_resp.status_code == 200:
+            profile["manager_name"] = mgr_resp.json().get("displayName")
+    except Exception as exc:
+        logger.info("No manager info available: %s", exc)
 
     try:
         photo_resp = httpx.get(
@@ -178,6 +204,9 @@ def verify_tenant_and_issue_session(code: str) -> str:
         "job_title": profile.get("job_title"),
         "department": profile.get("department"),
         "office_location": profile.get("office_location"),
+        "mobile_phone": profile.get("mobile_phone"),
+        "employee_id": profile.get("employee_id"),
+        "manager_name": profile.get("manager_name"),
         "iat": now,
         "exp": now + auth_config.session_ttl_hours * 3600,
     }
@@ -192,6 +221,9 @@ def get_current_user(session: dict) -> dict[str, Any]:
         "job_title": session.get("job_title"),
         "department": session.get("department"),
         "office_location": session.get("office_location"),
+        "mobile_phone": session.get("mobile_phone"),
+        "employee_id": session.get("employee_id"),
+        "manager_name": session.get("manager_name"),
         "photo_data_url": _photo_cache.get(email),
     }
 

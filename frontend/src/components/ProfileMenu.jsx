@@ -8,6 +8,60 @@ function initials(name) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function Avatar({ user, size }) {
+    if (user.photo_data_url) {
+        return (
+            <img
+                src={user.photo_data_url}
+                alt=""
+                style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+            />
+        );
+    }
+    return (
+        <div
+            style={{
+                width: size,
+                height: size,
+                borderRadius: "50%",
+                background: "var(--ms, #5059c9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: size * 0.4,
+                fontWeight: 700,
+                color: "#fff",
+                flexShrink: 0,
+            }}
+        >
+            {initials(user.name)}
+        </div>
+    );
+}
+
+function DetailRow({ label, value }) {
+    if (!value) return null;
+    return (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "6px 0" }}>
+            <span style={{ fontSize: 11, color: "var(--t3)" }}>{label}</span>
+            <span
+                style={{
+                    fontSize: 11.5,
+                    color: "var(--t1)",
+                    textAlign: "right",
+                    maxWidth: 150,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                }}
+                title={value}
+            >
+                {value}
+            </span>
+        </div>
+    );
+}
+
 export default function ProfileMenu() {
     const { user, logout } = useAuth();
     const [open, setOpen] = useState(false);
@@ -23,6 +77,9 @@ export default function ProfileMenu() {
 
     if (!user) return null;
 
+    const hasAnyDetail =
+        user.job_title || user.department || user.office_location || user.mobile_phone || user.manager_name || user.employee_id;
+
     return (
         <div className="range-wrap" ref={ref} style={{ position: "relative" }}>
             <button
@@ -31,100 +88,78 @@ export default function ProfileMenu() {
                 title={user.email}
                 style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 6 }}
             >
-                {user.photo_data_url ? (
-                    <img
-                        src={user.photo_data_url}
-                        alt=""
-                        style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover" }}
-                    />
-                ) : (
-                    <div
-                        style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: "50%",
-                            background: "var(--ms, #5059c9)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: "#fff",
-                        }}
-                    >
-                        {initials(user.name)}
-                    </div>
-                )}
+                <Avatar user={user} size={22} />
                 <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {user.name}
                 </span>
             </button>
 
             {open && (
-                <div className="range-menu" style={{ right: 0, left: "auto", minWidth: 240, padding: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                        {user.photo_data_url ? (
-                            <img
-                                src={user.photo_data_url}
-                                alt=""
-                                style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
-                            />
-                        ) : (
-                            <div
-                                style={{
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: "50%",
-                                    background: "var(--ms, #5059c9)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 14,
-                                    fontWeight: 700,
-                                    color: "#fff",
-                                }}
-                            >
-                                {initials(user.name)}
-                            </div>
-                        )}
-                        <div style={{ overflow: "hidden" }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {user.name}
-                            </div>
-                            <div style={{ fontSize: 11, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {user.email}
+                <div className="range-menu" style={{ right: 0, left: "auto", minWidth: 280, padding: 0, overflow: "hidden" }}>
+                    {/* Header block */}
+                    <div style={{ padding: 18, background: "var(--panel2, rgba(255,255,255,0.02))" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 2 }}>
+                            <Avatar user={user} size={44} />
+                            <div style={{ overflow: "hidden" }}>
+                                <div
+                                    style={{
+                                        fontWeight: 600,
+                                        fontSize: 14,
+                                        color: "var(--t1)",
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                    }}
+                                >
+                                    {user.name}
+                                </div>
+                                {user.job_title && (
+                                    <div style={{ fontSize: 11.5, color: "var(--t2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        {user.job_title}
+                                    </div>
+                                )}
+                                <div
+                                    style={{
+                                        fontSize: 10.5,
+                                        color: "var(--t3)",
+                                        fontFamily: "var(--mono)",
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        marginTop: 1,
+                                    }}
+                                >
+                                    {user.email}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10, marginBottom: 10 }}>
-                        {user.job_title && (
-                            <div style={{ fontSize: 12, color: "var(--t2)", marginBottom: 4 }}>
-                                <span style={{ color: "var(--t3)" }}>Title: </span>{user.job_title}
-                            </div>
-                        )}
-                        {user.department && (
-                            <div style={{ fontSize: 12, color: "var(--t2)", marginBottom: 4 }}>
-                                <span style={{ color: "var(--t3)" }}>Department: </span>{user.department}
-                            </div>
-                        )}
-                        {user.office_location && (
-                            <div style={{ fontSize: 12, color: "var(--t2)" }}>
-                                <span style={{ color: "var(--t3)" }}>Office: </span>{user.office_location}
-                            </div>
-                        )}
-                        {!user.job_title && !user.department && !user.office_location && (
-                            <div style={{ fontSize: 12, color: "var(--t3)" }}>No additional profile fields set in Azure AD.</div>
-                        )}
-                    </div>
+                    {/* Detail grid */}
+                    {hasAnyDetail && (
+                        <div style={{ padding: "6px 18px", borderTop: "1px solid var(--b1)", borderBottom: "1px solid var(--b1)" }}>
+                            <DetailRow label="Department" value={user.department} />
+                            <DetailRow label="Office" value={user.office_location} />
+                            <DetailRow label="Manager" value={user.manager_name} />
+                            <DetailRow label="Mobile" value={user.mobile_phone} />
+                            <DetailRow label="Employee ID" value={user.employee_id} />
+                        </div>
+                    )}
+                    {!hasAnyDetail && (
+                        <div style={{ padding: "10px 18px", borderTop: "1px solid var(--b1)", borderBottom: "1px solid var(--b1)", fontSize: 11.5, color: "var(--t3)" }}>
+                            No additional profile fields set in Azure AD.
+                        </div>
+                    )}
 
-                    <button
-                        className="range-item"
-                        onClick={logout}
-                        style={{ width: "100%", justifyContent: "center", color: "var(--danger, #f87171)" }}
-                    >
-                        Sign out
-                    </button>
+                    <div style={{ padding: 10 }}>
+                        <button
+                            className="range-item"
+                            onClick={logout}
+                            style={{ width: "100%", justifyContent: "center", color: "var(--danger, #f87171)" }}
+                        >
+                            Sign out
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
