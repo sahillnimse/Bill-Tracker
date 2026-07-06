@@ -43,8 +43,8 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
   const barColor = (d, isLast) => {
     if (d.value === 0) return "var(--t3)"; // muted — explicitly "no spend", not a data gap
     if (isLast && highlightLast) return "var(--danger)";
-    // Compute average of 7‑day and 15‑day SMA (provided by backend)
-    const avgSMA = (d.sma7 + d.sma15) / 2;
+    // Compute average of short and long SMA (provided by backend)
+    const avgSMA = (d.sma_short + d.sma_long) / 2;
     const upper = avgSMA * (1 + bufferPct);
     const lower = avgSMA * (1 - bufferPct);
     if (d.value > upper) return "var(--danger)"; // spending spike
@@ -164,7 +164,7 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
 
       {trailingZeroRun >= 5 && (
         <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--t3)" }}>
-          No GPU spend since {formatDate(series[lastActiveIdx].date)} — {trailingZeroRun} day
+          No spend since {formatDate(series[lastActiveIdx].date)} — {trailingZeroRun} day
           {trailingZeroRun === 1 ? "" : "s"} with no activity.
         </div>
       )}

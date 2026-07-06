@@ -18,7 +18,6 @@ from typing import Any
 import httpx
 
 from anomaly import AnomalySettings, detect_anomaly
-from cache import get_conn
 from config import app_config, runpod_config
 
 logger = logging.getLogger("spendwatch.runpod")
