@@ -55,7 +55,7 @@ function AppShell() {
           <ProfileMenu />
         </Topbar>
         <div className="content">
-          <Routes>
+          <Routes location={location} key={location.pathname}>
             <Route path="/" element={<Overview overview={overview} loading={loading} error={error} />} />
             <Route path="/aws" element={<AwsPage days={days} syncVersion={syncVersion} />} />
             <Route path="/runpod" element={<RunPodPage days={days} syncVersion={syncVersion} />} />

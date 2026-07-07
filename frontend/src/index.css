@@ -8,26 +8,26 @@
 
 :root {
   /* SpendWatch redesign palette — matches spendwatch-redesign-mockup.html */
-  --bg: #08090b;
-  --sb: #0c0d10;
-  --panel: #111318;
-  --panel2: #15171d;
-  --b1: rgba(255, 255, 255, 0.07);
-  --b2: rgba(255, 255, 255, 0.12);
-  --b3: rgba(255, 255, 255, 0.18);
-  --t1: #f2f3f5;
-  --t2: #9a9ea8;
-  --t3: #5e636e;
-  --accent: #FF1D58;
-  --amber: #FF1D58;
-  --aws: #f97316;
-  --runpod: #e879f9;
+  --bg: #0A0C10;
+  --sb: #0A0C10;
+  --panel: #12151B;
+  --panel2: #171B22;
+  --b1: rgba(255, 255, 255, 0.08);
+  --b2: rgba(255, 255, 255, 0.14);
+  --b3: rgba(255, 255, 255, 0.2);
+  --t1: #EDEFF2;
+  --t2: #8B92A0;
+  --t3: #565D6B;
+  --accent: #F0A83A;
+  --amber: #F0A83A;
+  --aws: #E08552;
+  --runpod: #C77DFF;
   --ga: #34d399;
-  --gads: #3b82f6;
-  --ms: #22d3ee;
-  --danger: #fb7185;
-  --warn: #fbbf24;
-  --ok: #34d399;
+  --gads: #5B8DEF;
+  --ms: #3FC7D6;
+  --danger: #EF5A5A;
+  --warn: #F0A83A;
+  --ok: #3FCF8E;
   --violet: #818cf8;
   --pink: #f472b6;
   --teal: #2dd4bf;

@@ -235,11 +235,24 @@ function MarketingPanel() {
 
 function SignInPanel() {
     const { login } = useAuth();
+    const [authStage, setAuthStage] = useState("idle"); // idle | loading | success
 
     const errorMessage = useMemo(() => {
         const params = new URLSearchParams(window.location.search);
         return getErrorMessage(params.get("login_error"));
     }, []);
+
+    const handleClick = () => {
+        if (authStage !== "idle") return;
+        setAuthStage("loading");
+        setTimeout(() => setAuthStage("success"), 600);
+        setTimeout(() => login(), 1100);
+    };
+
+    const btnLabel =
+        authStage === "success" ? "Redirecting…" :
+            authStage === "loading" ? "Connecting…" :
+                "Sign in with Microsoft";
 
     return (
         <div className="login-panel login-panel--right">
@@ -267,17 +280,31 @@ function SignInPanel() {
                     </div>
                 )}
 
-                <button className="login-btn" onClick={login}>
-                    <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true">
-                        <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-                        <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-                        <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-                    </svg>
-                    <span>Sign in with Microsoft</span>
-                    <svg className="login-btn-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M3 7h8M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                <button
+                    className={`login-btn${authStage === "loading" ? " login-btn--loading" : ""}${authStage === "success" ? " login-btn--success" : ""}`}
+                    onClick={handleClick}
+                    disabled={authStage !== "idle"}
+                >
+                    {authStage === "idle" && (
+                        <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true">
+                            <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                            <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                        </svg>
+                    )}
+                    {authStage === "loading" && <span className="login-btn-spinner" />}
+                    {authStage === "success" && (
+                        <svg className="login-btn-check" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    )}
+                    <span>{btnLabel}</span>
+                    {authStage === "idle" && (
+                        <svg className="login-btn-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path d="M3 7h8M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    )}
                 </button>
 
                 <div className="login-hint">You'll be redirected to Microsoft, then straight to your dashboard.</div>
