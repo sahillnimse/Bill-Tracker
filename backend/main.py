@@ -197,7 +197,7 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
             "today": 0.0,
             "month_to_date": 0.0,
             "roas": 0.0,
-            "total_conversions_30d": 0.0,
+            "total_conversions_period": 0.0,
             "daily_series": [{"date": today_iso, "value": 0.0}],
             "campaigns": [],
             "anomaly": default_anomaly,
@@ -323,8 +323,21 @@ def health() -> dict[str, str]:
 def overview(days: int = 30) -> dict[str, Any]:
     """Aggregated snapshot across all providers for the Overview page."""
     data = _fetch_all_parallel(lambda key: _get_provider_data(key, days=days))
-    today_total = sum(d.get("today", 0) or 0 for k, d in data.items() if k not in {"gworkspace"})
-    mtd_total = sum(d.get("month_to_date", 0) or d.get("monthly_cost", 0) or 0 for k, d in data.items())
+    # All active providers report spend already normalized to USD by their
+    # respective fetch functions (currency conversion happens backend-side).
+    # gworkspace is excluded because it reports a fixed monthly license cost
+    # rather than a daily variable spend, which skews the "today" total.
+    USD_SPEND_PROVIDERS = {"aws", "runpod", "google_ads", "ms365"}
+    today_total = sum(
+        d.get("today", 0) or 0
+        for k, d in data.items()
+        if k in USD_SPEND_PROVIDERS
+    )
+    mtd_total = sum(
+        d.get("month_to_date", 0) or d.get("monthly_cost", 0) or 0
+        for k, d in data.items()
+        if k in USD_SPEND_PROVIDERS
+    )
     anomalies = [
         {"provider": k, **d["anomaly"]}
         for k, d in data.items()

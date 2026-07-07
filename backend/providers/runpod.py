@@ -56,7 +56,29 @@ def _rest_get(path: str, params: dict | None = None) -> Any:
 def _fetch_active_pods() -> list[dict[str, Any]]:
     """Live pod list — only reflects pods running right now."""
     result = _rest_get("/pods")
-    return result if isinstance(result, list) else []
+    if isinstance(result, list):
+        return result
+    # RunPod may return a wrapped object (e.g. {"pods": [...]}) or an error dict.
+    # Log it so we can tell this apart from a genuinely empty account.
+    if isinstance(result, dict):
+        # Handle common wrapped shapes first
+        if "pods" in result:
+            pods = result["pods"]
+            if isinstance(pods, list):
+                logger.info("RunPod /pods returned wrapped shape {pods: [...]}, unwrapping")
+                return pods
+        logger.warning(
+            "RunPod /pods returned unexpected dict (not a bare list): %s — "
+            "treating as empty pod list. Check API key or RunPod API changes.",
+            list(result.keys()),
+        )
+    else:
+        logger.warning(
+            "RunPod /pods returned unexpected type %s: %r — treating as empty.",
+            type(result).__name__,
+            result,
+        )
+    return []
 
 
 def _fetch_billing(days: int) -> list[dict[str, Any]]:
@@ -73,7 +95,16 @@ def _fetch_billing(days: int) -> list[dict[str, Any]]:
             "grouping": "gpuTypeId",
         },
     )
-    return result if isinstance(result, list) else []
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict) and "data" in result and isinstance(result["data"], list):
+        logger.info("RunPod /billing/pods returned wrapped {data: [...]}, unwrapping")
+        return result["data"]
+    logger.warning(
+        "RunPod /billing/pods returned unexpected shape %s — treating as empty.",
+        type(result).__name__,
+    )
+    return []
 
 
 def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
@@ -179,8 +210,18 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
 
         estimated_cost = round(adjusted_cost_per_hr * (uptime_sec / 3600), 2) if uptime_sec > 0 else 0.0
 
-        gpu_name = (p.get("gpu") or {}).get("name") or (p.get("machine") or {}).get("gpuDisplayName") or "Unknown GPU"
-        gpu_count = (p.get("gpu") or {}).get("count") or (p.get("machine") or {}).get("gpuCount") or 1
+        # Bug fix: RunPod REST schema uses gpu.displayName, not gpu.name.
+        # Fallback chain covers all documented + observed field variations.
+        gpu_obj = p.get("gpu") or {}
+        machine_obj = p.get("machine") or {}
+        gpu_name = (
+            gpu_obj.get("displayName")          # documented REST field (primary)
+            or gpu_obj.get("name")              # some older API versions
+            or machine_obj.get("gpuDisplayName") # machine-level fallback
+            or machine_obj.get("gpuTypeId")     # last resort: raw type ID
+            or "Unknown GPU"
+        )
+        gpu_count = gpu_obj.get("count") or machine_obj.get("gpuCount") or 1
         try:
             gpu_count = max(1, int(gpu_count))
         except (TypeError, ValueError):
