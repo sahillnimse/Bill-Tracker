@@ -41,13 +41,13 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange, 
           {syncing ? "Syncing…" : `Synced ${formattedTime}`}
         </span>
 
-        {/* ── Currency toggle — works everywhere except MS365 (that page ignores it) ── */}
+        {/* ── Currency toggle ── */}
         <button
           className="range-btn"
           onClick={toggle}
           title={
             rateLoaded
-              ? `1 USD = ₹${rate.toFixed(2)} · click to switch (no effect on Microsoft 365 page)`
+              ? `1 USD = ₹${rate.toFixed(2)} · click to switch`
               : "Loading exchange rate…"
           }
           style={{ minWidth: 72, fontVariantNumeric: "tabular-nums" }}
@@ -90,7 +90,7 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange, 
                   {r.label}
                   {r.days === days && (
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6l3 3 5-5" stroke="#818cf8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M2 6l3 3 5-5" stroke="var(--amber)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
                 </button>

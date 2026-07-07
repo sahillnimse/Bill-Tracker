@@ -19,7 +19,7 @@ import { useState } from "react";
  * stopped — reads clearly as "no spend" rather than looking like a
  * rendering glitch or a chart that ignored the selected date range.
  */
-export default function DailyBarChart({ series = [], color = "#818cf8", highlightLast = false, bufferPct = 0.15 }) {
+export default function DailyBarChart({ series = [], color = "var(--violet)", highlightLast = false, bufferPct = 0.15 }) {
   const [hovered, setHovered] = useState(null);
 
   if (!series.length) {
@@ -109,8 +109,8 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
               marginBottom: 10,
               padding: "12px 16px",
               borderRadius: 10,
-              background: "var(--bg-card, #1a1a2e)",
-              border: "1px solid var(--border, #333)",
+              background: "var(--panel2)",
+              border: "1px solid var(--b2)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
               whiteSpace: "nowrap",
               zIndex: 50,
@@ -119,8 +119,8 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
               minWidth: 160,
             }}
           >
-            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>{formatDate(hovered.d.date)}</div>
-            <div style={{ color: "var(--text-muted, #999)", marginBottom: 2 }}>${hovered.d.value.toFixed(2)}</div>
+            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14, color: "var(--t1)" }}>{formatDate(hovered.d.date)}</div>
+            <div style={{ color: "var(--t2)", marginBottom: 2 }}>${hovered.d.value.toFixed(2)}</div>
             {hovered.d.value > 0 && hovered.d.pct_vs_sma_long != null && (
               <div
                 style={{
@@ -132,13 +132,13 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
                       ? "var(--danger)"
                       : hovered.d.signal === "dip" || hovered.d.signal === "crossover_down"
                         ? "var(--teal)"
-                        : "inherit",
+                        : "var(--t1)",
                 }}
               >
                 {pctLabel(hovered.d)} vs 20d avg
               </div>
             )}
-            <div style={{ marginTop: 4, color: "var(--text-muted, #999)", fontSize: 12 }}>
+            <div style={{ marginTop: 4, color: "var(--t2)", fontSize: 12 }}>
               {signalLabel(hovered.d)}
             </div>
           </div>

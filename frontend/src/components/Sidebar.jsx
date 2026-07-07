@@ -4,7 +4,7 @@ const NAV_ITEMS = [
   { path: "/aws", key: "aws", label: "AWS", color: "var(--aws)" },
   { path: "/runpod", key: "runpod", label: "RunPod", color: "var(--runpod)" },
   { path: "/google-ads", key: "gads", label: "Google Ads", color: "var(--gads)" },
-  { path: "/gworkspace", key: "gworkspace", label: "Google Workspace", color: "#34a853" },
+  { path: "/gworkspace", key: "gworkspace", label: "Google Workspace", color: "var(--ga)" },
   { path: "/ms365", key: "ms", label: "Microsoft 365", color: "var(--ms)" },
 ];
 
@@ -32,7 +32,7 @@ export default function Sidebar({ anomalyCount = 0, providerBadges = {} }) {
         className={({ isActive }) => `si c-overview${isActive ? " on" : ""}`}
       >
         <div className="si-bar"></div>
-        <span style={{ color: "#818cf8" }}>◆</span>
+        <span style={{ color: "var(--amber)" }}>◆</span>
         <span>All providers</span>
         {anomalyCount > 0 && <span className="badge b-danger">{anomalyCount}</span>}
       </NavLink>

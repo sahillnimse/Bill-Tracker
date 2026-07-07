@@ -1,4 +1,4 @@
-export default function Sparkline({ series = [], color = "#818cf8" }) {
+export default function Sparkline({ series = [], color = "var(--violet)" }) {
   if (!series.length) return <div className="spark" />;
   const values = series.slice(-14).map((d) => d.value);
   const max = Math.max(...values, 1);

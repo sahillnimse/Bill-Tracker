@@ -4,11 +4,12 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import ExportButton from "../components/ExportButton";
+import { useCurrency } from "../context/CurrencyContext";
 
 export default function Microsoft365Page({ syncVersion = 0 }) {
   const { data, loading, error } = useProvider("ms365", 30, syncVersion);
   const [history, setHistory] = useState([]);
-  const fmt = (n) => `₹${Number(n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const { fmt } = useCurrency();
 
   useEffect(() => {
     api.getAnomalies("ms365").then(setHistory).catch(() => { });
