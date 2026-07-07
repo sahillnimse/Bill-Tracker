@@ -161,28 +161,29 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     # Zero-fill any days with no billing activity, up through today —
     # otherwise the series silently stops at the last day with real spend,
     # and "today" in the UI ends up pointing at stale data.
+    today_utc = datetime.now(timezone.utc).date()
     if daily_totals:
         earliest = min(daily_totals.keys())
         start_date = datetime.strptime(earliest, "%Y-%m-%d").date()
-        end_date = date.today()
+        end_date = today_utc
         all_days = []
         d = start_date
         while d <= end_date:
             all_days.append(d.isoformat())
             d += timedelta(days=1)
     else:
-        all_days = [date.today().isoformat()]
+        all_days = [today_utc.isoformat()]
 
     daily_series = [
         {"date": d, "value": round(daily_totals.get(d, 0.0), 2)}
         for d in all_days
     ]
 
-    today_str = date.today().isoformat()
+    today_str = today_utc.isoformat()
     today_cost = round(daily_totals.get(today_str, 0.0), 2)
     today_gpu_hours = round(daily_hours.get(today_str, 0.0), 2)
 
-    month_str = date.today().strftime("%Y-%m")
+    month_str = today_utc.strftime("%Y-%m")
     mtd_total = round(sum(v for d, v in daily_totals.items() if d.startswith(month_str)), 2)
 
     total_gpu_cost = sum(gpu_costs.values()) or 1.0

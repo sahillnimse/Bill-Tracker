@@ -5,7 +5,7 @@ from the Google Ads API using OAuth2 (refresh token flow) + a developer token.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 import httpx
 
@@ -51,15 +51,17 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
 
     diagnostics: dict[str, str] = {}
 
-    # 1. Fetch customer currency code
+    # 1. Fetch customer currency code and timezone
     currency_code = "USD"
+    time_zone = "UTC"
     try:
-        currency_query = "SELECT customer.currency_code FROM customer LIMIT 1"
+        currency_query = "SELECT customer.currency_code, customer.time_zone FROM customer LIMIT 1"
         currency_rows = _run_query(client, currency_query)
         if currency_rows:
             currency_code = currency_rows[0].customer.currency_code or "USD"
+            time_zone = currency_rows[0].customer.time_zone or "UTC"
     except Exception as exc:
-        logger.warning("Failed to fetch customer currency: %s", exc)
+        logger.warning("Failed to fetch customer currency and timezone: %s", exc)
         diagnostics["currency_fetch"] = f"Failed to fetch currency: {exc}"
 
     # 2. Get USD exchange rate for this currency code
@@ -71,17 +73,26 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
                 data = resp.json()
                 rate = data.get("rates", {}).get(currency_code)
                 if rate:
-                    exchange_rate = float(rate)
-                    logger.info("Fetched exchange rate for %s: %s", currency_code, exchange_rate)
+                     exchange_rate = float(rate)
+                     logger.info("Fetched exchange rate for %s: %s", currency_code, exchange_rate)
         except Exception as exc:
             logger.warning("Failed to fetch exchange rate for %s: %s. Using fallback.", currency_code, exc)
             diagnostics["exchange_rate_fetch"] = f"Exchange rate fetch error, using fallback. {exc}"
             fallbacks = {"INR": 84.0, "EUR": 0.92, "GBP": 0.78}
             exchange_rate = fallbacks.get(currency_code, 1.0)
 
+    # Determine local date in Google Ads customer's configured timezone
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(time_zone)
+    except Exception:
+        from datetime import timezone
+        tz = timezone.utc
+    today_tz = datetime.now(tz).date()
+
     # Calculate dynamic start and end dates
-    end_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    start_date = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = (today_tz - timedelta(days=1)).strftime("%Y-%m-%d")
+    start_date = (today_tz - timedelta(days=days)).strftime("%Y-%m-%d")
 
     daily_query = f"""
         SELECT segments.date, metrics.cost_micros, metrics.conversions, metrics.conversions_value, metrics.clicks, metrics.impressions
@@ -129,20 +140,19 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
     )
     anomaly = detect_anomaly(values, settings)
 
-    # Use the actual today date to look up today's spend in the series, not just values[-1]
-    # (values[-1] may be yesterday if today has no data yet)
-    today_str = date.today().isoformat()
+    # Use the actual today date in customer timezone to look up today's spend in the series
+    today_str = today_tz.isoformat()
     today_spend_map = {d["date"]: d["value"] for d in daily_series}
     today_spend = today_spend_map.get(today_str, values[-1] if values else 0.0)
 
-    month_str = date.today().strftime("%Y-%m")
+    month_str = today_tz.strftime("%Y-%m")
     mtd_spend = round(sum(d["value"] for d in daily_series if d["date"].startswith(month_str)), 2)
     roas = round(total_conv_value / total_cost, 2) if total_cost > 0 else 0.0
     # Store as separate names so the campaign loop cannot overwrite these
     overall_avg_cpc = round(total_cost / total_clicks, 4) if total_clicks else 0.0
     overall_avg_cpm = round((total_cost / total_impressions) * 1000, 4) if total_impressions else 0.0
 
-    latest_date_str = daily_series[-1]["date"] if daily_series else date.today().strftime("%Y-%m-%d")
+    latest_date_str = daily_series[-1]["date"] if daily_series else today_tz.strftime("%Y-%m-%d")
 
     campaign_query = f"""
         SELECT campaign.name, metrics.cost_micros, metrics.conversions, metrics.conversions_value, metrics.average_cpc, metrics.clicks
