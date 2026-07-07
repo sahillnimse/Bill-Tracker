@@ -145,7 +145,7 @@ ANOMALY_LABELS = {
 }
 
 # Providers whose fetch functions accept a `days` parameter
-DAYS_AWARE_PROVIDERS = {"gworkspace", "aws"}
+DAYS_AWARE_PROVIDERS = {"gworkspace", "aws", "google_ads"}
 
 
 def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any]:
@@ -255,6 +255,8 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
             data = gworkspace_provider.fetch_gworkspace_data(days=days)
         elif provider_key == "runpod":
             data = runpod_provider.fetch_runpod_data(days=days)
+        elif provider_key == "google_ads":
+            data = google_ads_provider.fetch_google_ads_data(days=days)
         else:
             data = PROVIDERS[provider_key]()
     except Exception as exc:

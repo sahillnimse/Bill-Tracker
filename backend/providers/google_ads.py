@@ -7,10 +7,11 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from typing import Any
+import httpx
 
 from google.ads.googleads.client import GoogleAdsClient
 
-from anomaly import AnomalySettings, detect_anomaly
+from anomaly import AnomalySettings, detect_anomaly, compute_sma_series
 from config import app_config, google_ads_config
 
 logger = logging.getLogger("spendwatch.google_ads")
@@ -45,15 +46,47 @@ def _run_query(client: GoogleAdsClient, query: str) -> list[Any]:
     return list(response)
 
 
-def fetch_google_ads_data() -> dict[str, Any]:
+def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
     client = _client()
 
     diagnostics: dict[str, str] = {}
 
-    daily_query = """
+    # 1. Fetch customer currency code
+    currency_code = "USD"
+    try:
+        currency_query = "SELECT customer.currency_code FROM customer LIMIT 1"
+        currency_rows = _run_query(client, currency_query)
+        if currency_rows:
+            currency_code = currency_rows[0].customer.currency_code or "USD"
+    except Exception as exc:
+        logger.warning("Failed to fetch customer currency: %s", exc)
+        diagnostics["currency_fetch"] = f"Failed to fetch currency: {exc}"
+
+    # 2. Get USD exchange rate for this currency code
+    exchange_rate = 1.0
+    if currency_code != "USD":
+        try:
+            resp = httpx.get("https://open.er-api.com/v6/latest/USD", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                rate = data.get("rates", {}).get(currency_code)
+                if rate:
+                    exchange_rate = float(rate)
+                    logger.info("Fetched exchange rate for %s: %s", currency_code, exchange_rate)
+        except Exception as exc:
+            logger.warning("Failed to fetch exchange rate for %s: %s. Using fallback.", currency_code, exc)
+            diagnostics["exchange_rate_fetch"] = f"Exchange rate fetch error, using fallback. {exc}"
+            fallbacks = {"INR": 84.0, "EUR": 0.92, "GBP": 0.78}
+            exchange_rate = fallbacks.get(currency_code, 1.0)
+
+    # Calculate dynamic start and end dates
+    end_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    start_date = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    daily_query = f"""
         SELECT segments.date, metrics.cost_micros, metrics.conversions, metrics.conversions_value, metrics.clicks, metrics.impressions
         FROM customer
-        WHERE segments.date DURING LAST_30_DAYS
+        WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
         ORDER BY segments.date ASC
     """
     daily_rows = _run_query(client, daily_query)
@@ -67,7 +100,8 @@ def fetch_google_ads_data() -> dict[str, Any]:
     total_clicks = 0
     total_impressions = 0
     for row in daily_rows:
-        cost = row.metrics.cost_micros / 1_000_000
+        # Convert cost from local currency to USD
+        cost = (row.metrics.cost_micros / 1_000_000) / exchange_rate
         daily_series.append({"date": row.segments.date, "value": round(cost, 2)})
         clicks = row.metrics.clicks or 0
         impressions = row.metrics.impressions or 0
@@ -80,11 +114,13 @@ def fetch_google_ads_data() -> dict[str, Any]:
             "value": round((cost / impressions) * 1000, 4) if impressions else 0.0,
         })
         total_conversions += row.metrics.conversions
-        total_conv_value += row.metrics.conversions_value
+        total_conv_value += (row.metrics.conversions_value or 0.0) / exchange_rate
         total_cost += cost
         total_clicks += clicks
         total_impressions += impressions
 
+    daily_series = compute_sma_series(daily_series, short_window=7, long_window=20)
+    cpc_trend = compute_sma_series(cpc_trend, short_window=7, long_window=20)
     values = [d["value"] for d in daily_series]
     settings = AnomalySettings(
         z_threshold=app_config.z_score_threshold,
@@ -93,42 +129,53 @@ def fetch_google_ads_data() -> dict[str, Any]:
     )
     anomaly = detect_anomaly(values, settings)
 
-    today_spend = values[-1] if values else 0.0
+    # Use the actual today date to look up today's spend in the series, not just values[-1]
+    # (values[-1] may be yesterday if today has no data yet)
+    today_str = date.today().isoformat()
+    today_spend_map = {d["date"]: d["value"] for d in daily_series}
+    today_spend = today_spend_map.get(today_str, values[-1] if values else 0.0)
+
     month_str = date.today().strftime("%Y-%m")
     mtd_spend = round(sum(d["value"] for d in daily_series if d["date"].startswith(month_str)), 2)
     roas = round(total_conv_value / total_cost, 2) if total_cost > 0 else 0.0
-    avg_cpc = round(total_cost / total_clicks, 4) if total_clicks else 0.0
-    avg_cpm = round((total_cost / total_impressions) * 1000, 4) if total_impressions else 0.0
+    # Store as separate names so the campaign loop cannot overwrite these
+    overall_avg_cpc = round(total_cost / total_clicks, 4) if total_clicks else 0.0
+    overall_avg_cpm = round((total_cost / total_impressions) * 1000, 4) if total_impressions else 0.0
 
-    campaign_query = """
+    latest_date_str = daily_series[-1]["date"] if daily_series else date.today().strftime("%Y-%m-%d")
+
+    campaign_query = f"""
         SELECT campaign.name, metrics.cost_micros, metrics.conversions, metrics.conversions_value, metrics.average_cpc, metrics.clicks
         FROM campaign
-        WHERE segments.date DURING TODAY
+        WHERE segments.date = '{latest_date_str}'
         ORDER BY metrics.cost_micros DESC
     """
     campaign_rows = _run_query(client, campaign_query)
     campaigns = []
     total_today_cost = sum(r.metrics.cost_micros for r in campaign_rows) or 1
     for r in campaign_rows:
-        cost = r.metrics.cost_micros / 1_000_000
+        cost = (r.metrics.cost_micros / 1_000_000) / exchange_rate
+        # Use a LOCAL variable so the outer overall_avg_cpc is never overwritten
+        campaign_avg_cpc = ((r.metrics.average_cpc or 0) / 1_000_000) / exchange_rate
+        conv_val = (r.metrics.conversions_value or 0) / exchange_rate
         campaigns.append(
             {
                 "name": r.campaign.name,
                 "amount": round(cost, 2),
                 "pct": round(r.metrics.cost_micros / total_today_cost * 100, 1),
                 "conversions": r.metrics.conversions,
-                "avg_cpc": round((r.metrics.average_cpc or 0) / 1_000_000, 4),
+                "avg_cpc": round(campaign_avg_cpc, 4),
                 "clicks": r.metrics.clicks,
-                "roas": round(r.metrics.conversions_value / cost, 2) if cost > 0 else 0.0,
+                "roas": round(conv_val / cost, 2) if cost > 0 else 0.0,
             }
         )
 
     network_breakdown: list[dict[str, Any]] = []
     try:
-        network_query = """
+        network_query = f"""
             SELECT segments.ad_network_type, metrics.cost_micros, metrics.conversions
             FROM campaign
-            WHERE segments.date DURING LAST_30_DAYS
+            WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
             ORDER BY metrics.cost_micros DESC
         """
         network_rows = _run_query(client, network_query)
@@ -136,7 +183,7 @@ def fetch_google_ads_data() -> dict[str, Any]:
         for r in network_rows:
             name = r.segments.ad_network_type.name.replace("_", " ").title()
             entry = network_totals.setdefault(name, {"amount": 0.0, "conversions": 0.0})
-            entry["amount"] += r.metrics.cost_micros / 1_000_000
+            entry["amount"] += (r.metrics.cost_micros / 1_000_000) / exchange_rate
             entry["conversions"] += r.metrics.conversions
         total_network_cost = sum(v["amount"] for v in network_totals.values()) or 1.0
         network_breakdown = [
@@ -154,16 +201,16 @@ def fetch_google_ads_data() -> dict[str, Any]:
 
     rank_loss: list[dict[str, Any]] = []
     try:
-        rank_query = """
+        rank_query = f"""
             SELECT campaign.name, metrics.cost_micros, metrics.search_rank_lost_impression_share, metrics.search_budget_lost_impression_share
             FROM campaign
-            WHERE segments.date DURING LAST_30_DAYS
+            WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
             ORDER BY metrics.search_rank_lost_impression_share DESC
             LIMIT 8
         """
         rank_rows = _run_query(client, rank_query)
         for r in rank_rows:
-            cost = r.metrics.cost_micros / 1_000_000
+            cost = (r.metrics.cost_micros / 1_000_000) / exchange_rate
             rank_lost = r.metrics.search_rank_lost_impression_share
             budget_lost = r.metrics.search_budget_lost_impression_share
             if cost > 0 and (rank_lost or budget_lost):
@@ -179,10 +226,10 @@ def fetch_google_ads_data() -> dict[str, Any]:
 
     wasted_spend: list[dict[str, Any]] = []
     try:
-        wasted_query = """
+        wasted_query = f"""
             SELECT campaign.name, metrics.cost_micros, metrics.conversions, metrics.clicks
             FROM campaign
-            WHERE segments.date DURING LAST_30_DAYS
+            WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
               AND metrics.cost_micros > 0
               AND metrics.conversions = 0
             ORDER BY metrics.cost_micros DESC
@@ -192,7 +239,7 @@ def fetch_google_ads_data() -> dict[str, Any]:
         wasted_spend = [
             {
                 "name": r.campaign.name,
-                "amount": round(r.metrics.cost_micros / 1_000_000, 2),
+                "amount": round((r.metrics.cost_micros / 1_000_000) / exchange_rate, 2),
                 "clicks": r.metrics.clicks,
                 "conversions": r.metrics.conversions,
             }
@@ -207,9 +254,9 @@ def fetch_google_ads_data() -> dict[str, Any]:
         "today": round(today_spend, 2),
         "month_to_date": mtd_spend,
         "roas": roas,
-        "avg_cpc": avg_cpc,
-        "avg_cpm": avg_cpm,
-        "total_conversions_30d": round(total_conversions, 0),
+        "avg_cpc": overall_avg_cpc,
+        "avg_cpm": overall_avg_cpm,
+        "total_conversions_period": round(total_conversions, 0),
         "daily_series": daily_series,
         "cpc_trend": cpc_trend,
         "cpm_trend": cpm_trend,
