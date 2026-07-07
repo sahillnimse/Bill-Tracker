@@ -51,8 +51,8 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
           delta={isAnomaly ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
         <KpiCard accent="gads" label="Month to date" value={fmt(data.month_to_date)} />
-        <KpiCard accent="gads" label="ROAS (30d)" value={`${data.roas}x`} valueColor="var(--ok)" />
-        <KpiCard accent="gads" label="Avg CPC (30d)" value={fmt(data.avg_cpc || 0)}
+        <KpiCard accent="gads" label={`ROAS (${days}d)`} value={`${data.roas}x`} valueColor="var(--ok)" />
+        <KpiCard accent="gads" label={`Avg CPC (${days}d)`} value={fmt(data.avg_cpc || 0)}
           delta={`CPM ${fmt(data.avg_cpm || 0)}`} deltaClass="d-flat" />
       </div>
       <ExportButton data={data} filename="google_ads_data.json" label="Export Details" />
@@ -76,7 +76,7 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
       </div>
 
       <div className="two-col">
-        <div className="panel">
+        <div className="panel panel--chart">
           <div className="panel-hdr"><div className="panel-title">Daily ad spend - {days} days</div></div>
           <DailyBarChart series={data.daily_series} color="#3b82f6" highlightLast={isAnomaly} />
         </div>
@@ -100,7 +100,7 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
 
       <div className="two-col">
         <div className="panel">
-          <div className="panel-hdr"><div className="panel-title">Cost by network - 30 days</div></div>
+          <div className="panel-hdr"><div className="panel-title">{`Cost by network - ${days} days`}</div></div>
           {!data.network_breakdown?.length && <div className="empty-state">{data.diagnostics?.network_breakdown || "No network split available."}</div>}
           <div className="svc-list">
             {data.network_breakdown?.map((n, i) => (
@@ -115,8 +115,8 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
             ))}
           </div>
         </div>
-        <div className="panel">
-          <div className="panel-hdr"><div className="panel-title">CPC trend - 30 days</div></div>
+        <div className="panel panel--chart">
+          <div className="panel-hdr"><div className="panel-title">{`CPC trend - ${days} days`}</div></div>
           <DailyBarChart series={data.cpc_trend || []} color="#60a5fa" />
           <div className="panel-stat" style={{ marginTop: 10 }}>Avg CPC {fmt(data.avg_cpc || 0)} - Avg CPM {fmt(data.avg_cpm || 0)}</div>
         </div>
@@ -124,7 +124,7 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
 
       <div className="two-col">
         <div className="panel">
-          <div className="panel-hdr"><div className="panel-title">Wasted spend - 30 days</div></div>
+          <div className="panel-hdr"><div className="panel-title">{`Wasted spend - ${days} days`}</div></div>
           {!data.wasted_spend?.length && <div className="empty-state">{data.diagnostics?.wasted_spend || "No zero-conversion spend found."}</div>}
           <div className="svc-list">
             {data.wasted_spend?.map((c) => (

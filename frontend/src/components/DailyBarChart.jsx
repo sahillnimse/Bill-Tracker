@@ -40,16 +40,28 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
   })();
   const trailingZeroRun = lastActiveIdx >= 0 ? series.length - 1 - lastActiveIdx : 0;
 
+  const hexToRgba = (hex, alpha) => {
+    if (!hex || !hex.startsWith("#")) return hex;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   const barColor = (d, isLast) => {
     if (d.value === 0) return "var(--t3)"; // muted — explicitly "no spend", not a data gap
     if (isLast && highlightLast) return "var(--danger)";
-    // Compute average of short and long SMA (provided by backend)
+    
     const avgSMA = (d.sma_short + d.sma_long) / 2;
+    if (d.sma_short == null || d.sma_long == null || Number.isNaN(avgSMA)) {
+      return color;
+    }
+    
     const upper = avgSMA * (1 + bufferPct);
     const lower = avgSMA * (1 - bufferPct);
-    if (d.value > upper) return "var(--danger)"; // spending spike
-    if (d.value < lower) return "var(--teal)";   // spending dip
-    // Within buffer → normal range
+    if (d.value > upper) return "var(--danger)"; // spending spike (rose-red)
+    if (d.value < lower) return hexToRgba(color, 0.35); // spending dip (muted theme color)
+    // Within buffer → normal range (solid theme color)
     return color;
   };
 

@@ -89,7 +89,7 @@ export default function GoogleWorkspacePage({ days = 30, syncVersion = 0 }) {
       </div>
 
       <div className="two-col">
-        <div className="panel">
+        <div className="panel panel--chart">
           <div className="panel-hdr">
             <div className="panel-title">Drive activity · {days} days</div>
             <div className="panel-stat" style={{ color: "var(--ga)" }}>

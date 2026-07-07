@@ -40,11 +40,16 @@ export function CurrencyProvider({ children }) {
             if (usd == null || usd === "—") return "—";
             const num = parseFloat(usd);
             if (isNaN(num)) return usd; // pass non-numeric through unchanged
+            
+            const defaultOpts = currency === "INR"
+                ? { minimumFractionDigits: 0, maximumFractionDigits: 0, ...opts }
+                : { minimumFractionDigits: 2, maximumFractionDigits: 2, ...opts };
+
             if (currency === "INR") {
                 const inr = Math.round(num * rate);
-                return "₹" + inr.toLocaleString("en-IN", opts);
+                return "₹" + inr.toLocaleString("en-IN", defaultOpts);
             }
-            return "$" + num.toLocaleString("en-US", opts);
+            return "$" + num.toLocaleString("en-US", defaultOpts);
         },
         [currency, rate]
     );

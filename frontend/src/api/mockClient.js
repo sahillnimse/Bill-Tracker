@@ -118,7 +118,7 @@ function getGoogleAdsMock() {
     today: series[series.length - 1].value,
     month_to_date: mtd(series),
     roas: 3.4,
-    total_conversions_30d: 312,
+    total_conversions_period: 312,
     daily_series: series,
     campaigns: [
       { name: "Brand", amount: 54.2, pct: 41, conversions: 80, roas: 5.1 },
