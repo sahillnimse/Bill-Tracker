@@ -4,12 +4,18 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import ExportButton from "../components/ExportButton";
-import { useCurrency } from "../context/CurrencyContext";
+
+function fmtINR(value) {
+  if (value == null || value === "—") return "—";
+  const num = parseFloat(value);
+  if (isNaN(num)) return value;
+  return "₹" + Math.round(num).toLocaleString("en-IN");
+}
 
 export default function Microsoft365Page({ syncVersion = 0 }) {
   const { data, loading, error } = useProvider("ms365", 30, syncVersion);
   const [history, setHistory] = useState([]);
-  const { fmt } = useCurrency();
+  const fmt = fmtINR;
 
   useEffect(() => {
     api.getAnomalies("ms365").then(setHistory).catch(() => { });
@@ -22,8 +28,8 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
   // Derive per-tier monthly cost from the users actually on that tier, rather
   // than hardcoding a price here — avoids this page drifting out of sync with
   // the backend's real pricing config (see MS365_STANDARD_LICENSE_COST /
-  // MS365_BASIC_LICENSE_COST in backend/.env). Values are USD; the $/₹ toggle
-  // (CurrencyContext) converts live for display.
+  // MS365_BASIC_LICENSE_COST in backend/.env). Values are already INR — see
+  // fmtINR above, this page never uses the global $/₹ toggle.
   const standardUnitCost = data.recent_users?.find((u) => u.license === "Business Standard")?.cost ?? 0;
   const basicUnitCost = data.recent_users?.find((u) => u.license === "Business Basic")?.cost ?? 0;
 
@@ -69,12 +75,12 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
         <div className="da-card" data-accent="ms">
           <div className="da-label">Standard licences</div>
           <div className="da-val" style={{ color: "var(--ms)" }}>{data.standard_count}</div>
-          <div className="da-sub">{fmt(data.standard_count * (data.standard_cost_per_user || 14))}/mo est.</div>
+          <div className="da-sub">{fmt(data.standard_count * (data.standard_cost_per_user || 830))}/mo est.</div>
         </div>
         <div className="da-card" data-accent="teal">
           <div className="da-label">Business Basic licences</div>
           <div className="da-val" style={{ color: "var(--teal)" }}>{data.basic_count}</div>
-          <div className="da-sub">{fmt(data.basic_count * (data.basic_cost_per_user || 7))}/mo est.</div>
+          <div className="da-sub">{fmt(data.basic_count * (data.basic_cost_per_user || 170))}/mo est.</div>
         </div>
         <div className="da-card" data-accent="t3">
           <div className="da-label">Free / trial seats</div>

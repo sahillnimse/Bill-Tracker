@@ -132,18 +132,18 @@ def get_anomaly_history(provider: Optional[str] = None, limit: int = 20) -> list
     with get_conn() as conn:
         if provider:
             rows = conn.execute(
-                "SELECT provider, date, message, z_score, method, emailed FROM anomaly_history "
+                "SELECT id, provider, date, message, z_score, method, emailed FROM anomaly_history "
                 "WHERE provider = ? ORDER BY created_at DESC LIMIT ?",
                 (provider, limit),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT provider, date, message, z_score, method, emailed FROM anomaly_history "
+                "SELECT id, provider, date, message, z_score, method, emailed FROM anomaly_history "
                 "ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
     return [
-        {"provider": r[0], "date": r[1], "message": r[2], "z_score": r[3], "method": r[4] or "z_score", "emailed": bool(r[5])}
+        {"id": r[0], "provider": r[1], "date": r[2], "message": r[3], "z_score": r[4], "method": r[5] or "z_score", "emailed": bool(r[6])}
         for r in rows
     ]
 

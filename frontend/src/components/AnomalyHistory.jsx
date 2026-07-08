@@ -16,6 +16,9 @@ export default function AnomalyHistory({ items = [] }) {
           <div className="hdate">{item.date}</div>
           <div>
             <div className="htext">{item.message}</div>
+            <span className="method-tag" style={{ fontSize: 10, color: "var(--t3, #888)", marginRight: 6 }}>
+              {item.method === "sma" ? "SMA 7/20" : "Z-score"}
+            </span>
             {item.emailed && <span className="emailed">emailed</span>}
           </div>
         </div>

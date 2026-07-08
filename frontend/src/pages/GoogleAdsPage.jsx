@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
+import MonthlySpendCard from "../components/MonthlySpendCard";
+import { monthToDateLabel } from "../utils/dateRangeLabel";
 
 const CAMPAIGN_COLORS = ["var(--gads)", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
 
@@ -50,7 +52,8 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
         <KpiCard accent="gads" label="Today spend" value={fmt(data.today)} valueColor="var(--gads)"
           delta={isAnomaly ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
-        <KpiCard accent="gads" label="Month to date" value={fmt(data.month_to_date)} />
+        <KpiCard accent="gads" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
+        <KpiCard accent="gads" label={`Conversions (${days}d)`} value={data.total_conversions_period ?? 0} />
         <KpiCard accent="gads" label={`ROAS (${days}d)`} value={`${data.roas}x`} valueColor="var(--ok)" />
         <KpiCard accent="gads" label={`Avg CPC (${days}d)`} value={fmt(data.avg_cpc || 0)}
           delta={`CPM ${fmt(data.avg_cpm || 0)}`} deltaClass="d-flat" />
@@ -58,6 +61,7 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
       <ExportButton data={data} filename="google_ads_data.json" label="Export Details" />
 
       <div className="da-grid">
+        <MonthlySpendCard providerKey="google_ads" accent="google_ads" />
         <div className="da-card" data-accent="gads">
           <div className="da-label">Z-score today</div>
           <div className="da-val" style={{ color: isAnomaly ? "var(--danger)" : "var(--gads)" }}>{data.anomaly?.z_score ?? "-"}</div>
@@ -99,6 +103,19 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
       </div>
 
       <div className="two-col">
+        <div className="panel panel--chart">
+          <div className="panel-hdr"><div className="panel-title">{`CPC trend - ${days} days`}</div></div>
+          <DailyBarChart series={data.cpc_trend || []} color="#60a5fa" />
+          <div className="panel-stat" style={{ marginTop: 10 }}>Avg CPC {fmt(data.avg_cpc || 0)}</div>
+        </div>
+        <div className="panel panel--chart">
+          <div className="panel-hdr"><div className="panel-title">{`CPM trend - ${days} days`}</div></div>
+          <DailyBarChart series={data.cpm_trend || []} color="#93c5fd" />
+          <div className="panel-stat" style={{ marginTop: 10 }}>Avg CPM {fmt(data.avg_cpm || 0)}</div>
+        </div>
+      </div>
+
+      <div className="two-col">
         <div className="panel">
           <div className="panel-hdr"><div className="panel-title">{`Cost by network - ${days} days`}</div></div>
           {!data.network_breakdown?.length && <div className="empty-state">{data.diagnostics?.network_breakdown || "No network split available."}</div>}
@@ -115,14 +132,6 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
             ))}
           </div>
         </div>
-        <div className="panel panel--chart">
-          <div className="panel-hdr"><div className="panel-title">{`CPC trend - ${days} days`}</div></div>
-          <DailyBarChart series={data.cpc_trend || []} color="#60a5fa" />
-          <div className="panel-stat" style={{ marginTop: 10 }}>Avg CPC {fmt(data.avg_cpc || 0)} - Avg CPM {fmt(data.avg_cpm || 0)}</div>
-        </div>
-      </div>
-
-      <div className="two-col">
         <div className="panel">
           <div className="panel-hdr"><div className="panel-title">{`Wasted spend - ${days} days`}</div></div>
           {!data.wasted_spend?.length && <div className="empty-state">{data.diagnostics?.wasted_spend || "No zero-conversion spend found."}</div>}
@@ -139,6 +148,9 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="two-col">
         <div className="panel">
           <div className="panel-hdr"><div className="panel-title">Rank / budget loss</div></div>
           {!data.rank_loss?.length && <div className="empty-state">{data.diagnostics?.rank_loss || "No rank or budget loss data available."}</div>}

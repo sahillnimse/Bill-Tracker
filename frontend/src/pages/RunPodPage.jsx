@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
+import MonthlySpendCard from "../components/MonthlySpendCard";
+import { monthToDateLabel } from "../utils/dateRangeLabel";
 
 function formatRuntime(seconds = 0) {
   const h = Math.floor(seconds / 3600);
@@ -64,7 +66,10 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
 
       <div className="ph">
         <div className="ph-title"><span style={{ color: "var(--runpod)" }}>RunPod</span></div>
-        <div className="ph-sub">GPU compute - pod-level cost tracking</div>
+        <div className="ph-sub">
+          GPU compute - pod-level cost tracking
+          {data.as_of && ` · as of ${data.as_of}`}
+        </div>
       </div>
 
       {data._error && (
@@ -96,6 +101,7 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
           valueColor={isAnomaly ? "var(--danger)" : undefined}
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
+        <KpiCard accent="runpod" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
         <KpiCard accent="runpod" label={`Total - ${days}d`} value={fmt(periodTotal)}
           delta={`across ${data.daily_series?.length || days} days`}
           deltaClass="d-flat" />
@@ -110,6 +116,7 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
       <ExportButton data={data} filename="runpod_data.json" label="Export Details" />
 
       <div className="da-grid">
+        <MonthlySpendCard providerKey="runpod" accent="runpod" />
         <div className="da-card" data-accent="runpod">
           <div className="da-label">Z-score today</div>
           <div className="da-val" style={{ color: isAnomaly ? "var(--danger)" : "var(--runpod)" }}>{data.anomaly?.z_score ?? "-"}</div>

@@ -16,6 +16,8 @@ const realApi = {
     client.get("/overview", { params: { days } }).then((r) => r.data),
   getProvider: (key, days = 30) =>
     client.get(`/provider/${key}`, { params: { days } }).then((r) => r.data),
+  getProviderMonthly: (key, year, month) =>
+    client.get(`/provider/${key}/monthly`, { params: { year, month } }).then((r) => r.data),
   syncAll: (days = 30) =>
     client.post("/sync", null, { params: { days } }).then((r) => r.data),
   syncProvider: (key, days = 30) =>

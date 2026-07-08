@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import ExportButton from "../components/ExportButton";
+import MonthlySpendCard from "../components/MonthlySpendCard";
+import { monthToDateLabel } from "../utils/dateRangeLabel";
 
 export default function AwsPage({ days = 30, syncVersion = 0 }) {
   const { data, loading, error } = useProvider("aws", days, syncVersion);
@@ -32,7 +34,10 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
     <div className="page" id="page-aws">
       <div className="ph">
         <div className="ph-title"><span style={{ color: "var(--aws)" }}>●</span> Amazon Web Services</div>
-        <div className="ph-sub">UnblendedCost · daily granularity · {data.region}</div>
+        <div className="ph-sub">
+          UnblendedCost · daily granularity · {data.region}
+          {data.as_of_date && ` · as of ${data.as_of_date}`}
+        </div>
       </div>
 
       {data._error && (
@@ -50,7 +55,8 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
       <div className="kpi-grid">
         <KpiCard accent="aws" label="Today" value={fmt(data.today)} valueColor="var(--aws)"
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null} deltaClass={deltaClass} />
-        <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} />
+        <KpiCard accent="aws" label="Yesterday" value={fmt(data.yesterday)} />
+        <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
         <KpiCard accent="aws" label="Forecast month-end" value={fmt(data.forecast_month_end?.amount || 0)}
           delta={data.forecast_month_end?.note || "Cost Forecast API"} deltaClass="d-flat" />
         <KpiCard accent="aws" label={`${days}-day avg/day`} value={fmt(data.avg_per_day_30d)} />
@@ -58,6 +64,7 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
       <ExportButton data={data} filename="aws_data.json" label="Export Details" />
 
       <div className="da-grid">
+        <MonthlySpendCard providerKey="aws" accent="aws" />
         <div className="da-card" data-accent="aws">
           <div className="da-label">Largest service</div>
           <div className="da-val" style={{ color: "var(--aws)" }}>{data.services?.[0]?.name || "—"}</div>

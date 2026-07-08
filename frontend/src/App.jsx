@@ -14,6 +14,7 @@ import { CurrencyProvider } from "./context/CurrencyContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import ProfileMenu from "./components/ProfileMenu";
+import AnomalyToast from "./components/AnomalyToast";
 import "./App.css";
 
 function badgesFromOverview(overview) {
@@ -43,7 +44,8 @@ function AppShell() {
 
   return (
     <div className="shell">
-      <Sidebar anomalyCount={anomalyCount} providerBadges={providerBadges} />
+      <AnomalyToast anomalies={overview?.active_anomalies || []} />
+      <Sidebar anomalyCount={anomalyCount} providerBadges={providerBadges} /> 
       <main className="main">
         <Topbar
           syncedAt={lastSyncedAt}

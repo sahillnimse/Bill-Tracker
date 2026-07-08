@@ -323,4 +323,5 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         "wasted_spend": wasted_spend,
         "diagnostics": diagnostics,
         "anomaly": anomaly.__dict__,
+        "anomaly_sma": anomaly_sma.__dict__,
     }
