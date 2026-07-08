@@ -1,6 +1,7 @@
 import KpiCard from "../components/KpiCard";
 import DailyBarChart from "../components/DailyBarChart";
 import BreakdownPanel from "../components/BreakdownPanel";
+import Sparkline from "../components/Sparkline";
 import AnomalyHistory from "../components/AnomalyHistory";
 import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
@@ -37,6 +38,13 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
   const liveCostPerHr = (data.spot_cost_per_hr || 0) + (data.secure_cost_per_hr || 0);
   const spotPct = pct(data.spot_cost_per_hr, liveCostPerHr);
   const securePct = pct(data.secure_cost_per_hr, liveCostPerHr);
+  const periodTotal = (data.daily_series || []).reduce((sum, d) => sum + (d.value || 0), 0);
+
+  const podSpendTotal = (data.gpu_breakdown || []).reduce((sum, g) => sum + (g.amount || 0), 0);
+  const serverlessSpendTotal = (data.endpoint_breakdown || []).reduce((sum, e) => sum + (e.amount || 0), 0);
+  const podVsServerlessTotal = podSpendTotal + serverlessSpendTotal || 1;
+  const podSharePct = Math.round((podSpendTotal / podVsServerlessTotal) * 100);
+  const serverlessSharePct = Math.round((serverlessSpendTotal / podVsServerlessTotal) * 100);
 
   return (
     <div className="page" id="page-runpod">
@@ -83,11 +91,14 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
         </div>
       )}
 
-      <div className="kpi-grid">
+<div className="kpi-grid">
         <KpiCard accent="runpod" label="Today" value={fmt(data.today)}
           valueColor={isAnomaly ? "var(--danger)" : undefined}
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
+        <KpiCard accent="runpod" label={`Total - ${days}d`} value={fmt(periodTotal)}
+          delta={`across ${data.daily_series?.length || days} days`}
+          deltaClass="d-flat" />
         <KpiCard accent="runpod" label="Active pods" value={data.active_pods_count}
           delta={data.pods?.some((p) => p.estimated_cost > 10) ? "1+ flagged" : null}
           deltaClass="d-flat" />
@@ -215,8 +226,63 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
       </div>
 
       <div className="panel">
-        <div className="panel-hdr"><div className="panel-title">GPU type cost breakdown - running pods</div></div>
+        <div className="panel-hdr"><div className="panel-title">GPU type cost breakdown - pod spend</div></div>
         <BreakdownPanel provider="runpod" items={data.gpu_breakdown} />
+      </div>
+
+      <div className="panel">
+        <div className="panel-hdr"><div className="panel-title">Serverless endpoint cost breakdown</div></div>
+        {data.endpoint_breakdown?.length ? (
+          <>
+            <BreakdownPanel provider="runpod" items={data.endpoint_breakdown} topLabel="Top endpoint" />
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+              {data.endpoint_breakdown.slice(0, 5).map((ep) => (
+                <div key={ep.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 12.5, color: "var(--t2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }} title={ep.name}>
+                    {ep.name}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 60 }}>
+                    <Sparkline series={ep.daily_series} color="var(--runpod)" />
+                  </div>
+                  <span style={{ fontSize: 12.5, color: "var(--t1)", fontWeight: 600, minWidth: 60, textAlign: "right" }}>
+                    {fmt(ep.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="empty-state">No serverless spend in this period.</div>
+        )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-hdr">
+          <div className="panel-title">Pods vs serverless - where the money went</div>
+          <div className="panel-stat">{fmt(podVsServerlessTotal)} total, {days}d</div>
+        </div>
+        <div className="capacity-split">
+          <div className="capacity-row">
+            <div>
+              <div className="capacity-name">GPU pods</div>
+              <div className="capacity-sub">{data.gpu_breakdown?.length || 0} GPU type{(data.gpu_breakdown?.length || 0) === 1 ? "" : "s"}</div>
+            </div>
+            <div className="capacity-amount">{fmt(podSpendTotal)}</div>
+          </div>
+          <div className="capacity-track">
+            <div className="capacity-fill spot" style={{ width: `${podSharePct}%` }} />
+          </div>
+          <div className="capacity-row">
+            <div>
+              <div className="capacity-name">Serverless endpoints</div>
+              <div className="capacity-sub">{data.endpoint_breakdown?.length || 0} endpoint{(data.endpoint_breakdown?.length || 0) === 1 ? "" : "s"}</div>
+            </div>
+            <div className="capacity-amount">{fmt(serverlessSpendTotal)}</div>
+          </div>
+          <div className="capacity-track">
+            <div className="capacity-fill secure" style={{ width: `${serverlessSharePct}%` }} />
+          </div>
+        </div>
       </div>
 
       <AnomalyHistory items={history} />

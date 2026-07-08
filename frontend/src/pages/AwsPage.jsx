@@ -53,7 +53,7 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
         <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} />
         <KpiCard accent="aws" label="Forecast month-end" value={fmt(data.forecast_month_end?.amount || 0)}
           delta={data.forecast_month_end?.note || "Cost Forecast API"} deltaClass="d-flat" />
-        <KpiCard accent="aws" label="30-day avg/day" value={fmt(data.avg_per_day_30d)} />
+        <KpiCard accent="aws" label={`${days}-day avg/day`} value={fmt(data.avg_per_day_30d)} />
       </div>
       <ExportButton data={data} filename="aws_data.json" label="Export Details" />
 
@@ -81,7 +81,7 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
         <div className="panel panel--chart">
           <div className="panel-hdr">
             <div className="panel-title">Daily spend · {days} days</div>
-            <div className="panel-stat" style={{ color: "var(--aws)" }}>avg {fmt(data.avg_per_day_30d)}/day</div>
+            <div className="panel-stat" style={{ color: "var(--aws)" }}>avg {fmt(data.avg_per_day_30d)}/day ({days}d)</div>
           </div>
           <DailyBarChart series={data.daily_series} color="#f97316" highlightLast={data.anomaly?.is_anomaly} />
         </div>

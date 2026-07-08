@@ -1,3 +1,5 @@
+import { useCurrency } from "../context/CurrencyContext";
+
 const COLORS_BY_PROVIDER = {
   aws: ["var(--aws)", "#fb923c", "#fdba74", "#fde68a", "rgba(249,115,22,0.3)"],
   runpod: ["var(--runpod)", "#d946ef", "#a855f7", "#c084fc", "rgba(232,121,249,0.3)"],
@@ -10,6 +12,7 @@ function truncateLabel(name, maxLen = 12) {
 }
 
 export default function BreakdownPanel({ provider, items = [], unit = "$", topLabel }) {
+  const { fmt } = useCurrency();
   const palette = COLORS_BY_PROVIDER[provider] || COLORS_BY_PROVIDER.aws;
   const top = items[0];
   const topPct = top ? Math.round(top.pct) : 0;
@@ -58,7 +61,7 @@ export default function BreakdownPanel({ provider, items = [], unit = "$", topLa
               {item.pct}%
             </span>
             <span className="svc-amt">
-              {unit === "$" ? `$${item.amount}` : item.events?.toLocaleString() ?? item.amount}
+              {unit === "$" ? fmt(item.amount) : item.events?.toLocaleString() ?? item.amount}
             </span>
           </div>
         ))}

@@ -4,8 +4,12 @@ RunPod provider — pulls billing + live pod status via RunPod's REST API.
 RunPod's GraphQL `myself.pods` and REST `/v1/pods` only list pods that are
 CURRENTLY running — once a pod is stopped/terminated, it vanishes from both,
 even though it was billed real money while it ran. So this provider uses:
-  - REST `/v1/billing/pods` as the source of truth for spend (works whether
-    or not anything is running right now, and survives pod termination)
+  - REST `/v1/billing/pods` for GPU pod spend (works whether or not anything
+    is running right now, and survives pod termination)
+  - REST `/v1/billing/endpoints` for serverless spend — a SEPARATE billing
+    stream from pods. An account can have zero pod spend and still have
+    significant serverless spend (or vice versa), so both must be fetched
+    and summed together for an accurate total.
   - REST `/v1/pods` only for "how many pods are running right now" (a live
     status count, separate from historical billing)
 """
@@ -81,35 +85,43 @@ def _fetch_active_pods() -> list[dict[str, Any]]:
     return []
 
 
-def _fetch_billing(days: int) -> list[dict[str, Any]]:
-    """Historical per-day, per-GPU-type billing — survives pod termination."""
+def _fetch_billing(days: int, kind: str = "pods", grouping: str = "gpuTypeId") -> list[dict[str, Any]]:
+    """Historical per-day billing — survives pod/endpoint termination.
+
+    kind: 'pods' (GPU pods) or 'endpoints' (serverless). Both contribute
+    real spend and must be summed together for an accurate total — RunPod
+    bills pods and serverless endpoints as separate line items, and an
+    account can have spend in one with zero in the other.
+    """
     now = datetime.now(timezone.utc)
     start = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     result = _rest_get(
-        "/billing/pods",
+        f"/billing/{kind}",
         params={
             "startTime": start,
             "endTime": end,
             "bucketSize": "day",
-            "grouping": "gpuTypeId",
+            "grouping": grouping,
         },
     )
     if isinstance(result, list):
         return result
     if isinstance(result, dict) and "data" in result and isinstance(result["data"], list):
-        logger.info("RunPod /billing/pods returned wrapped {data: [...]}, unwrapping")
+        logger.info("RunPod /billing/%s returned wrapped {data: [...]}, unwrapping", kind)
         return result["data"]
     logger.warning(
-        "RunPod /billing/pods returned unexpected shape %s — treating as empty.",
-        type(result).__name__,
+        "RunPod /billing/%s returned unexpected shape %s — treating as empty.",
+        kind, type(result).__name__,
     )
     return []
 
 
 def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     active_pods = _fetch_active_pods()
-    billing_rows = _fetch_billing(days=days)
+    pod_billing_rows = _fetch_billing(days=days, kind="pods", grouping="gpuTypeId")
+    serverless_billing_rows = _fetch_billing(days=days, kind="endpoints", grouping="endpointId")
+    billing_rows = pod_billing_rows + serverless_billing_rows
 
     empty_data_reason = None
     running_count = sum(1 for p in active_pods if p.get("desiredStatus") == "RUNNING")
@@ -120,9 +132,12 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     )
 
     if not billing_rows:
-        # Run a wider diagnostic check (90 days)
+        # Run a wider diagnostic check (90 days), across both pods and serverless
         try:
-            wider_rows = _fetch_billing(days=90)
+            wider_rows = (
+                _fetch_billing(days=90, kind="pods")
+                + _fetch_billing(days=90, kind="endpoints")
+            )
         except Exception:
             wider_rows = []
 
@@ -135,20 +150,23 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
             empty_data_reason = RUNPOD_STOPPED_STORAGE_NOTE
         elif last_time:
             empty_data_reason = (
-                "No billing activity in this period. RunPod charges accrue only while a pod is actively running "
-                f"— since no pods were active, there's nothing to bill. Last activity: {last_time}."
+                "No billing activity in this period. RunPod charges accrue only while a pod or serverless "
+                f"endpoint is actively running — since none were active, there's nothing to bill. Last activity: {last_time}."
             )
         else:
             empty_data_reason = (
-                "No billing activity in this period. RunPod charges accrue only while a pod is actively running "
-                "— since no pods were active, there's nothing to bill."
+                "No billing activity in this period. RunPod charges accrue only while a pod or serverless "
+                "endpoint is actively running — since none were active, there's nothing to bill."
             )
 
     daily_totals: dict[str, float] = {}
     daily_hours: dict[str, float] = {}
     gpu_costs: dict[str, float] = {}
+    endpoint_costs: dict[str, float] = {}
+    # Per-endpoint day-by-day spend, for sparklines: {endpointId: {date: amount}}
+    endpoint_daily: dict[str, dict[str, float]] = {}
 
-    for row in billing_rows:
+    for row in pod_billing_rows:
         day = (row.get("time") or "")[:10]
         amount = row.get("amount") or 0.0
         ms = row.get("timeBilledMs") or 0
@@ -157,6 +175,18 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         daily_totals[day] = daily_totals.get(day, 0.0) + amount
         daily_hours[day] = daily_hours.get(day, 0.0) + (ms / 3_600_000)
         gpu_costs[gpu] = gpu_costs.get(gpu, 0.0) + amount
+
+    for row in serverless_billing_rows:
+        day = (row.get("time") or "")[:10]
+        amount = row.get("amount") or 0.0
+        ms = row.get("timeBilledMs") or 0
+        endpoint = row.get("endpointId") or "Unknown endpoint"
+
+        daily_totals[day] = daily_totals.get(day, 0.0) + amount
+        daily_hours[day] = daily_hours.get(day, 0.0) + (ms / 3_600_000)
+        endpoint_costs[endpoint] = endpoint_costs.get(endpoint, 0.0) + amount
+        endpoint_daily.setdefault(endpoint, {})
+        endpoint_daily[endpoint][day] = endpoint_daily[endpoint].get(day, 0.0) + amount
 
     # Zero-fill any days with no billing activity, up through today —
     # otherwise the series silently stops at the last day with real spend,
@@ -190,6 +220,23 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     gpu_breakdown = [
         {"name": name, "amount": round(amt, 2), "pct": round(amt / total_gpu_cost * 100, 1)}
         for name, amt in sorted(gpu_costs.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+
+    total_endpoint_cost = sum(endpoint_costs.values()) or 1.0
+    endpoint_breakdown = [
+        {
+            "name": name,
+            "amount": round(amt, 2),
+            "pct": round(amt / total_endpoint_cost * 100, 1),
+            # Zero-filled day-by-day series for this endpoint, aligned to the
+            # same date range as the account's main daily_series — powers a
+            # per-endpoint sparkline in the UI.
+            "daily_series": [
+                {"date": d, "value": round(endpoint_daily.get(name, {}).get(d, 0.0), 2)}
+                for d in all_days
+            ],
+        }
+        for name, amt in sorted(endpoint_costs.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
     now_utc = datetime.now(timezone.utc)
@@ -281,6 +328,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         "daily_series": daily_series,
         "pods": pods_out,
         "gpu_breakdown": gpu_breakdown,
+        "endpoint_breakdown": endpoint_breakdown,
         "anomaly": anomaly.__dict__,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "empty_data_reason": empty_data_reason,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCurrency } from "../context/CurrencyContext";
 
 /**
  * Renders a bar chart from a daily series.
@@ -13,11 +14,16 @@ import { useState } from "react";
  * This does NOT depend on d.signal or any backend threshold field at all,
  * so height, color, and message are always in agreement by construction.
  *
+ * All displayed amounts (tooltip value + % vs avg) go through the shared
+ * useCurrency().fmt(), so the tooltip always matches whatever currency
+ * (USD/INR) is currently toggled — no hardcoded "$" anywhere.
+ *
  * Zero-value days are styled distinctly (dim, flat, muted color) so a
  * long stretch of no activity reads clearly as "no spend."
  */
 export default function DailyBarChart({ series = [], color = "#818cf8", highlightLast = false, tierThresholdPct = 15 }) {
   const [hovered, setHovered] = useState(null);
+  const { fmt } = useCurrency();
 
   if (!series.length) {
     return <div className="empty-state">No data yet — click "Sync now" to fetch.</div>;
@@ -137,7 +143,7 @@ export default function DailyBarChart({ series = [], color = "#818cf8", highligh
             }}
           >
             <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14, color: "var(--t1)" }}>{formatDate(hovered.d.date)}</div>
-            <div style={{ color: "var(--t2)", marginBottom: 2 }}>${hovered.d.value.toFixed(2)}</div>
+            <div style={{ color: "var(--t2)", marginBottom: 2 }}>{fmt(hovered.d.value)}</div>
             {hovered.d.value > 0 && (
               <div
                 style={{
