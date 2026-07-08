@@ -25,6 +25,17 @@ export default function Overview({ overview, loading, error }) {
   const topAnomaly = active_anomalies?.[0];
   const providerCount = Object.keys(providers).length;
 
+  const providerLabel = (name) => {
+    if (name === "google_ads") return "Google Ads";
+    if (name === "ms365") return "Microsoft 365";
+    if (name === "gworkspace") return "Google Workspace";
+    if (name === "aws") return "AWS";
+    if (name === "runpod") return "RunPod";
+    return name;
+  };
+
+  const providerRoute = (name) => (name === "google_ads" ? "google-ads" : name);
+
   const yesterdayTotal = (aws.yesterday || 0) + (runpod.yesterday || 0) + (gads.yesterday || 0);
   const deltaPct = yesterdayTotal > 0
     ? Math.round(((today_total - yesterdayTotal) / yesterdayTotal) * 1000) / 10
@@ -198,6 +209,27 @@ export default function Overview({ overview, loading, error }) {
             <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmt(ms365.cost_per_user)}</div></div>
           </div>
       </div>
+
+      {active_anomalies && active_anomalies.length > 0 && (
+        <>
+          <div className="grid-label" style={{ marginTop: 24 }}>Anomalies (today &amp; yesterday)</div>
+          <div className="anomaly-list">
+            {active_anomalies.map((a) => (
+              <div
+                key={a.id}
+                className="anomaly-row"
+                onClick={() => navigate(`/${providerRoute(a.provider)}`)}
+              >
+                <div className="a-icon">!</div>
+                <div className="a-text">
+                  <b>{providerLabel(a.provider)}</b> — {a.message}
+                </div>
+                <div className="a-meta">{a.date}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
     </div>
   );

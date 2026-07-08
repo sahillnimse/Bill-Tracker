@@ -819,6 +819,37 @@
   white-space: nowrap;
 }
 
+.anomaly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.anomaly-row {
+  background: linear-gradient(135deg, rgba(255, 107, 91, 0.06), rgba(255, 107, 91, 0.02));
+  border: 1px solid rgba(255, 107, 91, 0.2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.anomaly-row:hover {
+  border-color: rgba(255, 107, 91, 0.4);
+  background: linear-gradient(135deg, rgba(255, 107, 91, 0.1), rgba(255, 107, 91, 0.03));
+}
+
+.a-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--t3);
+  white-space: nowrap;
+}
+
 /* ─── PANELS ─── */
 .two-col {
   display: grid;

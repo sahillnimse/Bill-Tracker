@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -272,7 +272,11 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
     set_provider_cache(provider_key, data, days=days)
 
     label = ANOMALY_LABELS.get(provider_key, provider_key)
-    today_date = datetime.now(timezone.utc).date().isoformat()
+    daily_series = data.get("daily_series")
+    if daily_series:
+        today_date = daily_series[-1]["date"]
+    else:
+        today_date = datetime.now(timezone.utc).date().isoformat()
 
     anomaly = data.get("anomaly")
     if anomaly and anomaly.get("is_anomaly"):
@@ -356,7 +360,10 @@ def overview(days: int = 30) -> dict[str, Any]:
         for k, d in data.items()
         if k in USD_SPEND_PROVIDERS
     )
-    anomalies = get_anomaly_history(limit=20)
+    all_anomalies = get_anomaly_history(limit=20)
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    yesterday_str = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+    anomalies = [a for a in all_anomalies if a["date"] in (today_str, yesterday_str)]
 
     days_left_in_month = 30 - datetime.now(timezone.utc).day
     projected_month_end = round(mtd_total + (today_total * max(days_left_in_month, 0)), 2)

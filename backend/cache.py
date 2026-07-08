@@ -128,22 +128,41 @@ def cleanup_old_anomalies(max_age_hours: float = 48, max_rows: int = 500) -> Non
 
 
 def get_anomaly_history(provider: Optional[str] = None, limit: int = 20) -> list[dict[str, Any]]:
+    """Return recent anomalies, deduped so a single spend event doesn't show
+    up twice just because both the z-score and SMA detectors flagged the
+    same provider on the same day. Both raw rows stay in the DB (they're
+    kept for the emailer / audit trail) - this only collapses what's
+    *returned* for display, keeping whichever method flagged the larger
+    deviation for that provider+date."""
+    # Pull extra rows before limiting, since collapsing pairs down to one
+    # entry each means a naive `LIMIT` up front could cut a pair in half.
+    fetch_limit = max(limit * 2, limit + 20)
     with get_conn() as conn:
         if provider:
             rows = conn.execute(
                 "SELECT id, provider, date, message, z_score, method, emailed FROM anomaly_history "
                 "WHERE provider = ? ORDER BY created_at DESC LIMIT ?",
-                (provider, limit),
+                (provider, fetch_limit),
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT id, provider, date, message, z_score, method, emailed FROM anomaly_history "
                 "ORDER BY created_at DESC LIMIT ?",
-                (limit,),
+                (fetch_limit,),
             ).fetchall()
+
+    best_by_key: dict[tuple[str, str], tuple] = {}
+    for r in rows:
+        _id, prov, date, message, z_score, method, emailed = r
+        key = (prov, date)
+        current = best_by_key.get(key)
+        if current is None or abs(z_score or 0.0) > abs(current[4] or 0.0):
+            best_by_key[key] = r
+
+    deduped = sorted(best_by_key.values(), key=lambda r: r[0], reverse=True)[:limit]
     return [
         {"id": r[0], "provider": r[1], "date": r[2], "message": r[3], "z_score": r[4], "method": r[5] or "z_score", "emailed": bool(r[6])}
-        for r in rows
+        for r in deduped
     ]
 
 
