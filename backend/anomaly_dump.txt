@@ -1,0 +1,12 @@
+total rows: 10
+
+(50, 'aws', 'AWS spend anomaly: today $0 vs baseline $35.14 (-100.0% change)', '2026-07-07')
+(51, 'aws', 'AWS spend anomaly: today $0 vs baseline $35.14 (-100.0% change)', '2026-07-07')
+(52, 'aws', 'AWS spend anomaly: today $0 vs baseline $35.14 (-100.0% change)', '2026-07-07')
+(53, 'runpod', 'RunPod spend anomaly (SMA 7/20): today 3.16 vs SMA20 baseline 28.22 (-88.8% change)', '2026-07-08')
+(54, 'aws', 'AWS spend anomaly (SMA 7/20): today 3.56 vs SMA20 baseline 32.46 (-89.0% change)', '2026-07-08')
+(55, 'google_ads', 'Google Ads spend anomaly (SMA 7/20): today 3.01 vs SMA20 baseline 8.3 (-63.7% change)', '2026-07-08')
+(57, 'runpod', 'RunPod spend anomaly (SMA 7/20): today 5.47 vs SMA20 baseline 28.34 (-80.7% change)', '2026-07-08')
+(58, 'runpod', 'RunPod spend anomaly (SMA 7/20): today 5.47 vs SMA20 baseline 28.34 (-80.7% change)', '2026-07-08')
+(59, 'aws', 'AWS spend anomaly (SMA 7/20): today 3.56 vs SMA20 baseline 32.46 (-89.0% change)', '2026-07-08')
+(60, 'google_ads', 'Google Ads spend anomaly (SMA 7/20): today 3.01 vs SMA20 baseline 8.3 (-63.7% change)', '2026-07-08')
