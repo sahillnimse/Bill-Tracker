@@ -407,27 +407,6 @@ def anomalies(provider: str | None = None, limit: int = 20) -> list[dict[str, An
     return get_anomaly_history(provider, limit)
 
 
-@app.post("/api/test-anomaly")
-def test_anomaly() -> dict[str, str]:
-    """TEMPORARY — inserts a fake anomaly to verify the toast/history pipeline end to end.
-    Remove this route once verified."""
-    record_anomaly(
-        provider="aws",
-        date=datetime.now(timezone.utc).date().isoformat(),
-        message="AWS spend anomaly (TEST): today 999.0 vs baseline 100.0 (899% change)",
-        z_score=9.9,
-        method="z_score",
-    )
-    record_anomaly(
-        provider="runpod",
-        date=datetime.now(timezone.utc).date().isoformat(),
-        message="RunPod spend anomaly (TEST, SMA 7/20): today 300.0 vs SMA20 baseline 50.0 (500% change)",
-        z_score=0.5,
-        method="sma",
-    )
-    return {"status": "inserted 2 test anomalies"}
-
-
 @app.get("/api/aws/instances")
 def aws_instances() -> dict[str, Any]:
     """

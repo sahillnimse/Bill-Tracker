@@ -95,14 +95,13 @@ def get_provider_cache(provider: str, max_age_seconds: Optional[int] = None, day
 
 def record_anomaly(provider: str, date: str, message: str, z_score: float, method: str = "z_score", emailed: bool = False) -> None:
     """Insert an anomaly, but skip if one was already recorded for this
-    provider+date+method within the last hour (prevents duplicate rows from
-    repeated polling/cache-refresh cycles hitting the same day's anomaly,
-    while still allowing z-score and SMA to each record independently)."""
-    recent_cutoff = time.time() - 3600
+    exact provider+date+method (prevents duplicate rows from repeated
+    polling/cache-refresh cycles hitting the same day's anomaly, while
+    still allowing z-score and SMA to each record independently)."""
     with get_conn() as conn:
         existing = conn.execute(
-            "SELECT 1 FROM anomaly_history WHERE provider = ? AND date = ? AND method = ? AND created_at >= ? LIMIT 1",
-            (provider, date, method, recent_cutoff),
+            "SELECT 1 FROM anomaly_history WHERE provider = ? AND date = ? AND method = ? LIMIT 1",
+            (provider, date, method),
         ).fetchone()
         if existing:
             return
@@ -114,9 +113,9 @@ def record_anomaly(provider: str, date: str, message: str, z_score: float, metho
         conn.commit()
 
 
-def cleanup_old_anomalies(max_age_hours: float = 36, max_rows: int = 500) -> None:
+def cleanup_old_anomalies(max_age_hours: float = 48, max_rows: int = 500) -> None:
     """Keep the anomaly_history table from growing unbounded.
-    History auto-clears after `max_age_hours` (default 36h)."""
+    History auto-clears after `max_age_hours` (default 48h)."""
     cutoff = time.time() - (max_age_hours * 3600)
     with get_conn() as conn:
         conn.execute("DELETE FROM anomaly_history WHERE created_at < ?", (cutoff,))
