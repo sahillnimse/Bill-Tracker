@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from anomaly import AnomalySettings, detect_anomaly
+from anomaly import AnomalySettings, detect_anomaly, detect_anomaly_sma
 from config import app_config, runpod_config
 
 logger = logging.getLogger("spendwatch.runpod")
@@ -115,6 +115,46 @@ def _fetch_billing(days: int, kind: str = "pods", grouping: str = "gpuTypeId") -
         kind, type(result).__name__,
     )
     return []
+
+
+def _fetch_billing_range(start_dt: datetime, end_dt: datetime, kind: str = "pods", grouping: str = "gpuTypeId") -> list[dict[str, Any]]:
+    result = _rest_get(
+        f"/billing/{kind}",
+        params={
+            "startTime": start_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "endTime": end_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "bucketSize": "day",
+            "grouping": grouping,
+        },
+    )
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict) and "data" in result and isinstance(result["data"], list):
+        return result["data"]
+    return []
+
+
+def fetch_runpod_monthly_spend(year: int, month: int) -> dict[str, Any]:
+    start_dt = datetime(year, month, 1, tzinfo=timezone.utc)
+    if month == 12:
+        end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        end_dt = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+
+    pod_rows = _fetch_billing_range(start_dt, end_dt, kind="pods")
+    endpoint_rows = _fetch_billing_range(start_dt, end_dt, kind="endpoints")
+
+    total = 0.0
+    for row in pod_rows + endpoint_rows:
+        total += row.get("amount") or 0.0
+
+    return {
+        "provider": "runpod",
+        "year": year,
+        "month": month,
+        "total": round(total, 2),
+        "currency": "USD",
+    }
 
 
 def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
@@ -318,7 +358,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly([d["value"] for d in daily_series], settings)
-
+    anomaly_sma = detect_anomaly_sma([d["value"] for d in daily_series])
     return {
         "provider": "runpod",
         "today": today_cost,
@@ -330,6 +370,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         "gpu_breakdown": gpu_breakdown,
         "endpoint_breakdown": endpoint_breakdown,
         "anomaly": anomaly.__dict__,
+        "anomaly_sma": anomaly_sma.__dict__,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "empty_data_reason": empty_data_reason,
         # Aggregated stats

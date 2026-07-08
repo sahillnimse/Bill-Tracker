@@ -271,19 +271,37 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
 
     set_provider_cache(provider_key, data, days=days)
 
+    label = ANOMALY_LABELS.get(provider_key, provider_key)
+    today_date = datetime.now(timezone.utc).date().isoformat()
+
     anomaly = data.get("anomaly")
     if anomaly and anomaly.get("is_anomaly"):
-        label = ANOMALY_LABELS.get(provider_key, provider_key)
         message = (
-            f"{label} spend anomaly: today ${anomaly.get('today_value')} "
-            f"vs baseline ${anomaly.get('baseline_mean')} "
+            f"{label} spend anomaly (z-score): today {anomaly.get('today_value')} "
+            f"vs baseline {anomaly.get('baseline_mean')} "
             f"({anomaly.get('pct_vs_baseline')}% change)"
         )
         record_anomaly(
             provider=provider_key,
-            date=datetime.now(timezone.utc).date().isoformat(),
+            date=today_date,
             message=message,
             z_score=anomaly.get("z_score", 0.0),
+            method="z_score",
+        )
+
+    anomaly_sma = data.get("anomaly_sma")
+    if anomaly_sma and anomaly_sma.get("is_anomaly"):
+        message = (
+            f"{label} spend anomaly (SMA 7/20): today {anomaly_sma.get('today_value')} "
+            f"vs SMA20 baseline {anomaly_sma.get('baseline_mean')} "
+            f"({anomaly_sma.get('pct_vs_baseline')}% change)"
+        )
+        record_anomaly(
+            provider=provider_key,
+            date=today_date,
+            message=message,
+            z_score=anomaly_sma.get("z_score", 0.0),
+            method="sma",
         )
 
     cleanup_old_anomalies()
@@ -362,6 +380,17 @@ def provider_detail(provider_key: str, days: int = 30) -> dict[str, Any]:
     if provider_key not in PROVIDERS:
         raise HTTPException(404, f"Unknown provider '{provider_key}'")
     return _get_provider_data(provider_key, days=days)
+
+
+@app.get("/api/provider/{provider_key}/monthly")
+def provider_monthly_spend(provider_key: str, year: int, month: int) -> dict[str, Any]:
+    if provider_key == "aws":
+        return aws_provider.fetch_aws_monthly_spend(year, month)
+    if provider_key == "runpod":
+        return runpod_provider.fetch_runpod_monthly_spend(year, month)
+    if provider_key == "google_ads":
+        return google_ads_provider.fetch_google_ads_monthly_spend(year, month)
+    raise HTTPException(404, f"Monthly spend not supported for '{provider_key}'")
 
 
 @app.post("/api/sync")

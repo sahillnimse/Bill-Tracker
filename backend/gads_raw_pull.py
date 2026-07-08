@@ -49,6 +49,22 @@ def main():
         ORDER BY segments.date
     """
 
+    # Fetch the account's native billing currency — cost_micros is always in
+    # this currency, NOT USD. The main app (google_ads.py) converts this to
+    # USD internally using a live exchange rate; this standalone script does
+    # NOT do that conversion, so we must label the output honestly or it
+    # will be misread as USD ground truth (as happened before this fix).
+    currency_code = "UNKNOWN"
+    try:
+        currency_rows = list(ga_service.search(
+            customer_id=google_ads_config.customer_id,
+            query="SELECT customer.currency_code FROM customer LIMIT 1",
+        ))
+        if currency_rows:
+            currency_code = currency_rows[0].customer.currency_code or "UNKNOWN"
+    except Exception:
+        pass
+
     rows = list(ga_service.search(customer_id=google_ads_config.customer_id, query=query))
 
     daily = {}
@@ -61,7 +77,12 @@ def main():
         daily[d]["clicks"] += row.metrics.clicks
         daily[d]["impressions"] += row.metrics.impressions
 
-    out = {"customer_id": google_ads_config.customer_id, "daily": daily}
+    out = {
+        "customer_id": google_ads_config.customer_id,
+        "cost_currency": currency_code,
+        "cost_currency_note": f"All 'cost' values below are in {currency_code}, NOT USD.",
+        "daily": daily,
+    }
     with open("gads_raw_full.json", "w") as f:
         json.dump(out, f, indent=2)
 

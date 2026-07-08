@@ -11,7 +11,7 @@ import httpx
 
 from google.ads.googleads.client import GoogleAdsClient
 
-from anomaly import AnomalySettings, detect_anomaly, compute_sma_series
+from anomaly import AnomalySettings, detect_anomaly, compute_sma_series, detect_anomaly_sma
 from config import app_config, google_ads_config
 
 logger = logging.getLogger("spendwatch.google_ads")
@@ -44,6 +44,53 @@ def _run_query(client: GoogleAdsClient, query: str) -> list[Any]:
     ga_service = client.get_service("GoogleAdsService")
     response = ga_service.search(customer_id=google_ads_config.customer_id, query=query)
     return list(response)
+
+
+def fetch_google_ads_monthly_spend(year: int, month: int) -> dict[str, Any]:
+    client = _client()
+
+    currency_code = "USD"
+    try:
+        currency_query = "SELECT customer.currency_code FROM customer LIMIT 1"
+        currency_rows = _run_query(client, currency_query)
+        if currency_rows:
+            currency_code = currency_rows[0].customer.currency_code or "USD"
+    except Exception:
+        pass
+
+    exchange_rate = 1.0
+    if currency_code != "USD":
+        try:
+            resp = httpx.get("https://open.er-api.com/v6/latest/USD", timeout=5)
+            if resp.status_code == 200:
+                rate = resp.json().get("rates", {}).get(currency_code)
+                if rate:
+                    exchange_rate = float(rate)
+        except Exception:
+            fallbacks = {"INR": 84.0, "EUR": 0.92, "GBP": 0.78}
+            exchange_rate = fallbacks.get(currency_code, 1.0)
+
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+
+    monthly_query = f"""
+        SELECT metrics.cost_micros
+        FROM customer
+        WHERE segments.date BETWEEN '{start_date.strftime("%Y-%m-%d")}' AND '{end_date.strftime("%Y-%m-%d")}'
+    """
+    rows = _run_query(client, monthly_query)
+    total = sum((r.metrics.cost_micros / 1_000_000) / exchange_rate for r in rows)
+
+    return {
+        "provider": "google_ads",
+        "year": year,
+        "month": month,
+        "total": round(total, 2),
+        "currency": "USD",
+    }
 
 
 def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
@@ -139,7 +186,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly(values, settings)
-
+    anomaly_sma = detect_anomaly_sma(values)
     # Use the actual today date in customer timezone to look up today's spend in the series
     today_str = today_tz.isoformat()
     today_spend_map = {d["date"]: d["value"] for d in daily_series}

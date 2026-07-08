@@ -36,11 +36,16 @@ def init_db() -> None:
                 date TEXT NOT NULL,
                 message TEXT NOT NULL,
                 z_score REAL,
+                method TEXT DEFAULT 'z_score',
                 emailed INTEGER DEFAULT 0,
                 created_at REAL NOT NULL
             )
             """
         )
+        existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(anomaly_history)").fetchall()]
+        if "method" not in existing_cols:
+            conn.execute("ALTER TABLE anomaly_history ADD COLUMN method TEXT DEFAULT 'z_score'")
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS settings (
@@ -88,22 +93,23 @@ def get_provider_cache(provider: str, max_age_seconds: Optional[int] = None, day
     return data
 
 
-def record_anomaly(provider: str, date: str, message: str, z_score: float, emailed: bool = False) -> None:
+def record_anomaly(provider: str, date: str, message: str, z_score: float, method: str = "z_score", emailed: bool = False) -> None:
     """Insert an anomaly, but skip if one was already recorded for this
-    provider+date within the last hour (prevents duplicate rows from
-    repeated polling/cache-refresh cycles hitting the same day's anomaly)."""
+    provider+date+method within the last hour (prevents duplicate rows from
+    repeated polling/cache-refresh cycles hitting the same day's anomaly,
+    while still allowing z-score and SMA to each record independently)."""
     recent_cutoff = time.time() - 3600
     with get_conn() as conn:
         existing = conn.execute(
-            "SELECT 1 FROM anomaly_history WHERE provider = ? AND date = ? AND created_at >= ? LIMIT 1",
-            (provider, date, recent_cutoff),
+            "SELECT 1 FROM anomaly_history WHERE provider = ? AND date = ? AND method = ? AND created_at >= ? LIMIT 1",
+            (provider, date, method, recent_cutoff),
         ).fetchone()
         if existing:
             return
         conn.execute(
-            "INSERT INTO anomaly_history (provider, date, message, z_score, emailed, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (provider, date, message, z_score, int(emailed), time.time()),
+            "INSERT INTO anomaly_history (provider, date, message, z_score, method, emailed, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (provider, date, message, z_score, method, int(emailed), time.time()),
         )
         conn.commit()
 
@@ -126,18 +132,18 @@ def get_anomaly_history(provider: Optional[str] = None, limit: int = 20) -> list
     with get_conn() as conn:
         if provider:
             rows = conn.execute(
-                "SELECT provider, date, message, z_score, emailed FROM anomaly_history "
+                "SELECT provider, date, message, z_score, method, emailed FROM anomaly_history "
                 "WHERE provider = ? ORDER BY created_at DESC LIMIT ?",
                 (provider, limit),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT provider, date, message, z_score, emailed FROM anomaly_history "
+                "SELECT provider, date, message, z_score, method, emailed FROM anomaly_history "
                 "ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
     return [
-        {"provider": r[0], "date": r[1], "message": r[2], "z_score": r[3], "emailed": bool(r[4])}
+        {"provider": r[0], "date": r[1], "message": r[2], "z_score": r[3], "method": r[4] or "z_score", "emailed": bool(r[5])}
         for r in rows
     ]
 

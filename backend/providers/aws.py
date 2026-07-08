@@ -12,7 +12,7 @@ from typing import Any
 
 import boto3
 
-from anomaly import AnomalySettings, compute_sma_series, detect_anomaly
+from anomaly import AnomalySettings, compute_sma_series, detect_anomaly, detect_anomaly_sma
 from config import aws_config, app_config
 
 logger = logging.getLogger("spendwatch.aws")
@@ -156,6 +156,26 @@ def _commitment_utilization(start: date, end: date) -> dict[str, Any]:
 
 
     
+def fetch_aws_monthly_spend(year: int, month: int) -> dict[str, Any]:
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1)
+    else:
+        end = date(year, month + 1, 1)
+
+    daily = _daily_cost_by_service(start, end)
+    total = round(sum(sum(services.values()) for services in daily.values()), 2)
+
+    return {
+        "provider": "aws",
+        "year": year,
+        "month": month,
+        "total": total,
+        "currency": "USD",
+        "days_with_data": len(daily),
+    }
+
+
 def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     today = date.today()
     start = today - timedelta(days=days)
@@ -172,6 +192,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly(daily_totals, settings)
+    anomaly_sma = detect_anomaly_sma(daily_totals)
 
     today_str = sorted_days[-1] if sorted_days else today.isoformat()
     yesterday_total = daily_totals[-2] if len(daily_totals) >= 2 else 0.0
@@ -243,6 +264,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         "commitment_utilization": commitment_utilization,
         "diagnostics": diagnostics,
         "anomaly": anomaly.__dict__,
+        "anomaly_sma": anomaly_sma.__dict__,
         "region": aws_config.region,
         "as_of_date": today_str,
     }

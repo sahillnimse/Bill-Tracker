@@ -83,6 +83,58 @@ def detect_anomaly(
     )
 
 
+def detect_anomaly_sma(
+    series: Sequence[float],
+    short_window: int = 7,
+    long_window: int = 20,
+    spike_threshold_pct: float = 15.0,
+) -> AnomalyResult:
+    """
+    SMA(7)/SMA(20) crossover-and-magnitude based anomaly detection.
+    Flags today as anomalous if today's value deviates from the SMA(20)
+    baseline by more than spike_threshold_pct, mirroring the "spike"/"dip"
+    signal logic already used for the daily chart annotations.
+    """
+    if len(series) < long_window:
+        today = series[-1] if series else 0.0
+        return AnomalyResult(
+            is_anomaly=False,
+            z_score=0.0,
+            baseline_mean=today,
+            baseline_stdev=0.0,
+            today_value=today,
+            pct_vs_baseline=0.0,
+            delta=0.0,
+        )
+
+    today_value = series[-1]
+    sma_short = _sma(series, short_window)[-1]
+    sma_long = _sma(series, long_window)[-1]
+
+    pct_vs_long = ((today_value - sma_long) / sma_long * 100) if sma_long else 0.0
+    delta = today_value - sma_long if sma_long else 0.0
+
+    is_anomaly = abs(pct_vs_long) >= spike_threshold_pct
+
+    if is_anomaly and abs(pct_vs_long) >= spike_threshold_pct * 1.5:
+        severity = "danger"
+    elif is_anomaly:
+        severity = "warn"
+    else:
+        severity = "ok"
+
+    return AnomalyResult(
+        is_anomaly=is_anomaly,
+        z_score=round((sma_short - sma_long) / sma_long, 2) if sma_long else 0.0,
+        baseline_mean=round(sma_long, 2) if sma_long else 0.0,
+        baseline_stdev=0.0,
+        today_value=round(today_value, 2),
+        pct_vs_baseline=round(pct_vs_long, 1),
+        delta=round(delta, 2),
+        severity=severity,
+    )
+
+
 def _sma(values: Sequence[float], window: int) -> list[float | None]:
     """
     Simple moving average over `values`, where each point is the mean of the

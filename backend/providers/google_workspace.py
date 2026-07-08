@@ -26,7 +26,7 @@ from typing import Any
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-from anomaly import AnomalySettings, detect_anomaly
+from anomaly import AnomalySettings, detect_anomaly, detect_anomaly_sma
 from config import app_config, gworkspace_config
 
 logger = logging.getLogger("spendwatch.gworkspace")
@@ -154,7 +154,7 @@ def fetch_gworkspace_data(days: int = 30) -> dict[str, Any]:
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly(values, settings)
-
+    anomaly_sma = detect_anomaly_sma(values)
     seats = gworkspace_config.seats
     cost_per_seat = gworkspace_config.cost_per_seat
     monthly_cost = round(seats * cost_per_seat, 2)
@@ -190,4 +190,5 @@ def fetch_gworkspace_data(days: int = 30) -> dict[str, Any]:
         },
         "domain": gworkspace_config.domain,
         "anomaly": anomaly.__dict__,
+        "anomaly_sma": anomaly_sma.__dict__,
     }
