@@ -4,18 +4,23 @@
   height: 100vh;
   overflow: hidden;
   background: var(--bg);
+  padding: 14px;
+  gap: 14px;
 }
 
-/* ─── SIDEBAR ─── */
 .sb {
   width: 232px;
   flex-shrink: 0;
   background: var(--sb);
-  border-right: 1px solid var(--b1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--b1);
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 2;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 .sb::after {
@@ -25,7 +30,7 @@
   right: 0;
   width: 1px;
   height: 100%;
-  background: linear-gradient(180deg, transparent, rgba(255, 176, 32, 0.4), rgba(139, 140, 248, 0.2), transparent);
+  background: linear-gradient(180deg, transparent, rgba(0, 229, 212, 0.4), rgba(199, 107, 255, 0.2), transparent);
 }
 
 .sb-head {
@@ -49,7 +54,7 @@
   font-size: 13px;
   font-weight: 700;
   color: #fff;
-  background: var(--amber);
+  background: var(--cyan);
   flex-shrink: 0;
   position: relative;
 }
@@ -133,27 +138,27 @@
 }
 
 .si.on.c-overview::before {
-  background: linear-gradient(90deg, rgba(255, 176, 32, 0.12), transparent);
+  background: linear-gradient(90deg, rgba(255, 29, 88, 0.1), transparent);
 }
 
 .si.on.c-aws::before {
-  background: linear-gradient(90deg, rgba(255, 159, 67, 0.1), transparent);
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.1), transparent);
 }
 
 .si.on.c-runpod::before {
-  background: linear-gradient(90deg, rgba(185, 140, 255, 0.1), transparent);
+  background: linear-gradient(90deg, rgba(232, 121, 249, 0.1), transparent);
 }
 
 .si.on.c-ga::before {
-  background: linear-gradient(90deg, rgba(47, 217, 138, 0.12), transparent);
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.1), transparent);
 }
 
 .si.on.c-gads::before {
-  background: linear-gradient(90deg, rgba(76, 154, 255, 0.12), transparent);
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), transparent);
 }
 
 .si.on.c-ms::before {
-  background: linear-gradient(90deg, rgba(52, 214, 196, 0.12), transparent);
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.1), transparent);
 }
 
 .si.on.c-settings::before {
@@ -176,7 +181,7 @@
 }
 
 .si.c-overview .si-bar {
-  background: var(--amber);
+  background: var(--cyan);
 }
 
 .si.c-aws .si-bar {
@@ -225,17 +230,17 @@
 }
 
 .b-danger {
-  background: rgba(255, 92, 110, 0.16);
+  background: rgba(255, 107, 91, 0.16);
   color: var(--danger);
 }
 
 .b-warn {
   background: rgba(255, 176, 32, 0.14);
-  color: var(--amber);
+  color: var(--cyan);
 }
 
 .b-ok {
-  background: rgba(47, 217, 138, 0.13);
+  background: rgba(74, 222, 128, 0.13);
   color: var(--ok);
 }
 
@@ -252,13 +257,14 @@
 
 /* ─── TOPBAR ─── */
 .topbar {
-  height: 54px;
+  height: 58px;
   flex-shrink: 0;
-  background: var(--sb);
+  background: var(--panel2);
   border-bottom: 1px solid var(--b1);
+  border-radius: 18px 18px 0 0;
   display: flex;
   align-items: center;
-  padding: 0 22px;
+  padding: 0 24px;
   gap: 8px;
   position: relative;
 }
@@ -270,7 +276,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 176, 32, 0.35), rgba(52, 214, 196, 0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0, 229, 212, 0.45), rgba(199, 107, 255, 0.25), transparent);
 }
 
 .back-btn {
@@ -318,8 +324,8 @@
 }
 
 .tab.on {
-  color: var(--amber);
-  background: var(--amber-dim);
+  color: var(--cyan);
+  background: rgba(167, 139, 250, 0.13);
 }
 
 .tb-r {
@@ -337,7 +343,7 @@
 
 .sync-btn {
   padding: 7px 18px;
-  background: var(--amber);
+  background: var(--cyan);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -372,7 +378,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--panel);
+  border-radius: 18px;
+  border: 1px solid var(--b1);
 }
 
 .content {
@@ -459,12 +467,17 @@
 
 .hero-figure {
   font-family: var(--mono);
-  font-size: 52px;
+  font-size: 64px;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
   animation: figureIn .6s var(--out) both;
   animation-delay: .05s;
+  background: linear-gradient(100deg, var(--cyan) 0%, var(--cyan) 40%, var(--lime) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  width: fit-content;
 }
 
 @keyframes figureIn {
@@ -487,7 +500,7 @@
 }
 
 .hero-figure .ccy {
-  color: var(--amber);
+  color: var(--cyan);
   font-size: 28px;
   margin-right: 4px;
   vertical-align: 4px;
@@ -535,7 +548,7 @@
 
 .ledger-tick {
   height: 1px;
-  background: linear-gradient(90deg, var(--amber), transparent 70%);
+  background: linear-gradient(90deg, var(--cyan), transparent 70%);
   margin-top: 18px;
   position: relative;
   overflow: hidden;
@@ -580,13 +593,13 @@
 }
 
 .kc {
-  background: var(--panel);
+  background: var(--panel2);
   border: 1px solid var(--b1);
-  border-radius: 12px;
-  padding: 15px 16px;
+  border-radius: 16px;
+  padding: 17px 18px;
   position: relative;
   overflow: hidden;
-  transition: transform .2s, border-color .2s;
+  transition: transform .25s var(--out), border-color .25s, box-shadow .25s;
   cursor: default;
   opacity: 0;
   animation: kcIn .4s var(--out) forwards;
@@ -629,7 +642,9 @@
 }
 
 .kc:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: var(--b3);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
 .kc-shine {
@@ -637,39 +652,39 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 1px;
+  height: 2px;
 }
 
 .kc[data-accent="violet"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(139, 147, 248, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.7), transparent);
 }
 
 .kc[data-accent="aws"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(255, 159, 67, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 159, 67, 0.7), transparent);
 }
 
 .kc[data-accent="runpod"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(185, 140, 255, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(199, 107, 255, 0.7), transparent);
 }
 
 .kc[data-accent="ga"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(47, 217, 138, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(74, 222, 128, 0.7), transparent);
 }
 
 .kc[data-accent="gads"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(76, 154, 255, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(76, 154, 255, 0.7), transparent);
 }
 
 .kc[data-accent="ms"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(52, 214, 196, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0, 229, 212, 0.7), transparent);
 }
 
 .kc[data-accent="danger"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(255, 92, 110, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 107, 91, 0.7), transparent);
 }
 
 .kc[data-accent="warn"] .kc-shine {
-  background: linear-gradient(90deg, transparent, rgba(255, 176, 32, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 176, 32, 0.7), transparent);
 }
 
 .kc-label {
@@ -710,8 +725,8 @@
 
 /* ─── ANOMALY BANNER / STRIP ─── */
 .anomaly-strip {
-  background: linear-gradient(135deg, rgba(255, 92, 110, 0.08), rgba(255, 92, 110, 0.02));
-  border: 1px solid rgba(255, 92, 110, 0.25);
+  background: linear-gradient(135deg, rgba(255, 107, 91, 0.08), rgba(255, 107, 91, 0.02));
+  border: 1px solid rgba(255, 107, 91, 0.25);
   border-radius: 10px;
   padding: 14px 18px;
   display: flex;
@@ -727,8 +742,8 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  border: 1px solid rgba(255, 92, 110, 0.3);
-  background: linear-gradient(135deg, rgba(255, 92, 110, 0.07), rgba(255, 92, 110, 0.04));
+  border: 1px solid rgba(255, 107, 91, 0.3);
+  background: linear-gradient(135deg, rgba(255, 107, 91, 0.07), rgba(255, 107, 91, 0.04));
   position: relative;
   overflow: hidden;
   animation: bPulse 2.5s ease-in-out infinite;
@@ -742,7 +757,7 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: rgba(255, 92, 110, 0.06);
+  background: rgba(255, 107, 91, 0.06);
   animation: aOrb 4s ease-in-out infinite;
 }
 
@@ -798,7 +813,7 @@
 .a-link {
   margin-left: auto;
   font-size: 11.5px;
-  color: var(--amber);
+  color: var(--cyan);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -863,15 +878,16 @@
 
 .cb {
   flex: 1;
-  border-radius: 3px 3px 0 0;
+  border-radius: 6px 6px 0 0;
   cursor: pointer;
-  transition: opacity .15s, transform .1s;
+  transition: opacity .15s, transform .15s, filter .15s;
   transform-origin: bottom;
 }
 
 .cb:hover {
-  opacity: .7;
+  opacity: .85;
   transform: scaleY(1.03);
+  filter: brightness(1.2) drop-shadow(0 0 8px currentColor);
 }
 
 .spark {
@@ -1085,10 +1101,16 @@
 .da-card {
   background: var(--panel2);
   border: 1px solid var(--b1);
-  border-radius: 10px;
-  padding: 13px;
+  border-radius: 14px;
+  padding: 14px;
   position: relative;
   overflow: hidden;
+  transition: transform .2s var(--out), border-color .2s;
+}
+
+.da-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--b3);
 }
 
 .da-card::before {
@@ -1122,18 +1144,6 @@
 
 .da-card[data-accent="ms"]::before {
   background: linear-gradient(90deg, transparent, var(--ms), transparent);
-}
-
-.da-card[data-accent="ga"]::before {
-  background: linear-gradient(90deg, transparent, var(--ga), transparent);
-}
-
-.da-card[data-accent="gads"]::before {
-  background: linear-gradient(90deg, transparent, var(--gads), transparent);
-}
-
-.da-card[data-accent="danger"]::before {
-  background: linear-gradient(90deg, transparent, var(--danger), transparent);
 }
 
 .da-card[data-accent="warn"]::before {
@@ -1174,23 +1184,23 @@
 }
 
 .p-ok {
-  background: rgba(47, 217, 138, 0.13);
+  background: rgba(74, 222, 128, 0.13);
   color: #6ee7b7;
 }
 
 .p-warn {
-  background: rgba(255, 176, 32, 0.13);
+  background: rgba(251, 191, 36, 0.13);
   color: #fcd34d;
 }
 
 .p-danger {
-  background: rgba(255, 92, 110, 0.13);
+  background: rgba(255, 107, 91, 0.13);
   color: #fca5a5;
 }
 
 .p-violet {
-  background: rgba(139, 147, 248, 0.13);
-  color: #a5b4fc;
+  background: rgba(167, 139, 250, 0.13);
+  color: var(--cyan);
 }
 
 /* ─── TABLE ─── */
@@ -1263,8 +1273,8 @@
   font-family: var(--mono);
   text-transform: uppercase;
   letter-spacing: .05em;
-  color: var(--violet);
-  background: rgba(139, 147, 248, 0.14);
+  color: #818cf8;
+  background: rgba(167, 139, 250, 0.12);
   padding: 2px 7px;
   border-radius: 5px;
 }
@@ -1289,8 +1299,8 @@
 }
 
 .pod.alert {
-  border-color: rgba(255, 92, 110, .35);
-  background: rgba(255, 92, 110, .04);
+  border-color: rgba(255, 107, 91, .35);
+  background: rgba(255, 107, 91, .04);
   animation: bPulse 2s ease-in-out infinite;
 }
 
@@ -1463,7 +1473,7 @@
 
 .set-input:focus {
   outline: none;
-  border-color: rgba(139, 147, 248, .5);
+  border-color: rgba(167, 139, 250, .5);
 }
 
 .set-text {
@@ -1481,13 +1491,13 @@
 
 .set-text:focus {
   outline: none;
-  border-color: rgba(139, 147, 248, .4);
+  border-color: rgba(167, 139, 250, .4);
 }
 
 .set-save-btn {
   padding: 8px 18px;
-  background: linear-gradient(135deg, #FFB020, #FF8A3D);
-  color: #14161C;
+  background: linear-gradient(135deg, #00E5D4, #B4FF39);
+  color: #06121A;
   border: none;
   border-radius: 8px;
   font-size: 12px;
@@ -1592,7 +1602,7 @@
 }
 
 .status-pill.ok {
-  background: rgba(47, 217, 138, 0.13);
+  background: rgba(74, 222, 128, 0.13);
   color: var(--ok);
 }
 
@@ -1602,12 +1612,12 @@
 }
 
 .status-pill.stale {
-  background: rgba(255, 176, 32, 0.13);
+  background: rgba(251, 191, 36, 0.13);
   color: var(--warn);
 }
 
 .status-pill.error {
-  background: rgba(255, 92, 110, 0.13);
+  background: rgba(255, 107, 91, 0.13);
   color: var(--danger);
 }
 
@@ -1711,13 +1721,13 @@
 }
 
 .range-item.on {
-  color: var(--amber);
-  background: var(--amber-dim);
+  color: var(--cyan);
+  background: rgba(167, 139, 250, 0.1);
 }
 
 /* ─── NEW SIDEBAR COLORS (append to App.css) ─── */
 .si.on.c-gworkspace::before {
-  background: linear-gradient(90deg, rgba(47, 217, 138, 0.12), transparent);
+  background: rgba(74, 222, 128, 0.1);
 }
 
 .si.c-gworkspace .si-bar {
@@ -1748,7 +1758,7 @@
   margin: 8px 0 4px;
   border-radius: 7px;
   border: 1px solid var(--b2);
-  background: rgba(139, 147, 248, 0.1);
+  background: rgba(0, 229, 212, 0.08);
   color: var(--violet);
   font-size: 12px;
   font-weight: 600;
@@ -1765,7 +1775,7 @@
 }
 
 .export-btn:hover {
-  background: rgba(139, 147, 248, 0.2);
+  background: rgba(0, 229, 212, 0.18);
   box-shadow: 0 0 0 1px var(--violet);
 }
 
