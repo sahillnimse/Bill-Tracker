@@ -1290,6 +1290,10 @@
   padding-top: 2px;
 }
 
+.ov-anomaly-history .hdate {
+  width: 90px;
+}
+
 .htext {
   font-size: 12px;
   color: var(--t2);

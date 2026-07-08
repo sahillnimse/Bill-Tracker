@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import Sparkline from "../components/Sparkline";
+import AnomalyHistory from "../components/AnomalyHistory";
 import { useCurrency } from "../context/CurrencyContext";
 
 function pipClass(provider) {
@@ -208,29 +209,19 @@ export default function Overview({ overview, loading, error }) {
             <div><div className="pc-stat-label">New IDs (7d)</div><div className="pc-stat-val" style={{ color: "var(--warn)" }}>+{ms365.new_ids_7d ?? 0}</div></div>
             <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmt(ms365.cost_per_user)}</div></div>
           </div>
+        </div>
       </div>
 
       {active_anomalies && active_anomalies.length > 0 && (
-        <>
-          <div className="grid-label" style={{ marginTop: 24 }}>Anomalies (today &amp; yesterday)</div>
-          <div className="anomaly-list">
-            {active_anomalies.map((a) => (
-              <div
-                key={a.id}
-                className="anomaly-row"
-                onClick={() => navigate(`/${providerRoute(a.provider)}`)}
-              >
-                <div className="a-icon">!</div>
-                <div className="a-text">
-                  <b>{providerLabel(a.provider)}</b> — {a.message}
-                </div>
-                <div className="a-meta">{a.date}</div>
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="ov-anomaly-history" style={{ marginTop: 24 }}>
+          <AnomalyHistory
+            items={active_anomalies.map((a) => ({
+              ...a,
+              message: `${providerLabel(a.provider)} — ${a.message}`,
+            }))}
+          />
+        </div>
       )}
-    </div>
     </div>
   );
 }
