@@ -8,6 +8,10 @@ const ERROR_MESSAGES = {
     invalid_client: "This app isn't configured correctly with Microsoft yet. Contact the SpendWatch admin.",
     consent_required: "This app needs admin approval before you can sign in. Contact the SpendWatch admin.",
     interaction_required: "Microsoft needs you to complete an extra verification step. Please try again.",
+    invalid_state: "Your sign-in session expired. Please try again.",
+    token_exchange_failed: "Microsoft sign-in failed. Please try again.",
+    foreign_tenant: "This account is not part of the authorized organization.",
+    unknown_error: "Sign-in failed. Please try again, or contact the SpendWatch admin if this keeps happening.",
 };
 
 function getErrorMessage(code) {

@@ -74,11 +74,21 @@ def auth_login():
 def auth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         return RedirectResponse(f"{auth_config.frontend_url}/?login_error={error}")
-    if not code:
-        return RedirectResponse(f"{auth_config.frontend_url}/?login_error=missing_code")
 
-    auth.validate_state(state)
-    session_token = auth.verify_tenant_and_issue_session(code)
+    try:
+        if not code:
+            return RedirectResponse(f"{auth_config.frontend_url}/?login_error=missing_code")
+
+        auth.validate_state(state)
+        session_token = auth.verify_tenant_and_issue_session(code)
+    except HTTPException as exc:
+        error_map = {
+            400: "invalid_state",
+            401: "token_exchange_failed",
+            403: "foreign_tenant",
+        }
+        error_key = error_map.get(exc.status_code, "unknown_error")
+        return RedirectResponse(f"{auth_config.frontend_url}/?login_error={error_key}")
 
     resp = RedirectResponse(auth_config.frontend_url)
     resp.set_cookie(
