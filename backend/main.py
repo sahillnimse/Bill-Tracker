@@ -350,13 +350,13 @@ def health() -> dict[str, str]:
     return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
 
 
-@app.get("/api/debug/auth-config")
 def debug_auth_config() -> dict[str, Any]:
     """TEMPORARY — remove after confirming cross-origin cookie deployment."""
     return {
         "cross_origin": auth_config.cross_origin,
         "redirect_uri": auth_config.redirect_uri,
         "frontend_url": auth_config.frontend_url,
+        "cors_origin": repr(app_config.cors_origin),
     }
 
 
