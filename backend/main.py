@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -117,35 +117,6 @@ def auth_logout():
 def auth_me(session: dict = Depends(auth.require_session)):
     return auth.get_current_user(session)
 
-
-# ── Global guard: every /api/* route below requires a valid Xarka session,
-# except the ones already defined above (health check + the auth flow
-# itself, which obviously can't require you to already be logged in). ──
-@app.middleware("http")
-async def enforce_auth(request: Request, call_next):
-    open_paths = {
-        "/api/health",
-        "/api/auth/login",
-        "/api/auth/callback",
-        "/api/auth/logout",
-    }
-    if request.url.path in open_paths or not request.url.path.startswith("/api/"):
-        return await call_next(request)
-
-    cookie = request.cookies.get(auth.SESSION_COOKIE_NAME)
-    if not cookie:
-        return _json_401()
-    try:
-        import jwt as _jwt
-        _jwt.decode(cookie, auth_config.session_secret, algorithms=["HS256"])
-    except Exception:
-        return _json_401()
-
-    return await call_next(request)
-
-def _json_401():
-    from fastapi.responses import JSONResponse
-    return JSONResponse(status_code=401, content={"detail": "Not signed in."})
 
 PROVIDERS = {
     "aws": aws_provider.fetch_aws_data,
