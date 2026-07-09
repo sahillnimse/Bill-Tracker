@@ -79,6 +79,7 @@ class AuthConfig:
     # MUST be set to a long random value in .env for production use.
     session_secret: str = _get("AUTH_SESSION_SECRET", "dev-only-insecure-secret-change-me")
     session_ttl_hours: int = _get_int("AUTH_SESSION_TTL_HOURS", 24 * 7)  # 1 week
+    cross_origin: bool = _get("AUTH_CROSS_ORIGIN", "false").lower() == "true"
 
 
 @dataclass(frozen=True)

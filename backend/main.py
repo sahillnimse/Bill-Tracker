@@ -85,7 +85,8 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
         key=auth.SESSION_COOKIE_NAME,
         value=session_token,
         httponly=True,
-        samesite="lax",
+        samesite="none" if auth_config.cross_origin else "lax",
+        secure=auth_config.cross_origin,
         max_age=auth_config.session_ttl_hours * 3600,
     )
     return resp
@@ -94,7 +95,11 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
 @app.post("/api/auth/logout")
 def auth_logout():
     resp = RedirectResponse(auth_config.frontend_url)
-    resp.delete_cookie(auth.SESSION_COOKIE_NAME)
+    resp.delete_cookie(
+        auth.SESSION_COOKIE_NAME,
+        samesite="none" if auth_config.cross_origin else "lax",
+        secure=auth_config.cross_origin,
+    )
     return resp
 
 
