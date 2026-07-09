@@ -41,6 +41,10 @@ from providers import runpod as runpod_provider
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("spendwatch.main")
+logger.info(
+    "AUTH CONFIG CHECK — cross_origin=%s redirect_uri=%s frontend_url=%s",
+    auth_config.cross_origin, auth_config.redirect_uri, auth_config.frontend_url,
+)
 
 app = FastAPI(title="SpendWatch API")
 
