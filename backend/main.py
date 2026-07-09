@@ -342,7 +342,7 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/overview")
-def overview(days: int = 30) -> dict[str, Any]:
+def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     """Aggregated snapshot across all providers for the Overview page."""
     data = _fetch_all_parallel(lambda key: _get_provider_data(key, days=days))
     # All active providers report spend already normalized to USD by their
@@ -379,14 +379,14 @@ def overview(days: int = 30) -> dict[str, Any]:
 
 
 @app.get("/api/provider/{provider_key}")
-def provider_detail(provider_key: str, days: int = 30) -> dict[str, Any]:
+def provider_detail(provider_key: str, days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     if provider_key not in PROVIDERS:
         raise HTTPException(404, f"Unknown provider '{provider_key}'")
     return _get_provider_data(provider_key, days=days)
 
 
 @app.get("/api/provider/{provider_key}/monthly")
-def provider_monthly_spend(provider_key: str, year: int, month: int) -> dict[str, Any]:
+def provider_monthly_spend(provider_key: str, year: int, month: int, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     if provider_key == "aws":
         return aws_provider.fetch_aws_monthly_spend(year, month)
     if provider_key == "runpod":
@@ -397,25 +397,25 @@ def provider_monthly_spend(provider_key: str, year: int, month: int) -> dict[str
 
 
 @app.post("/api/sync")
-def sync_all(days: int = 30) -> dict[str, Any]:
+def sync_all(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     """Force a fresh pull from every provider's live API."""
     results = _fetch_all_parallel(lambda key: _fetch_and_cache(key, days=days))
     return {"synced_at": datetime.now(timezone.utc).isoformat(), "providers": results}
 
 @app.post("/api/sync/{provider_key}")
-def sync_provider(provider_key: str, days: int = 30) -> dict[str, Any]:
+def sync_provider(provider_key: str, days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     if provider_key not in PROVIDERS:
         raise HTTPException(404, f"Unknown provider '{provider_key}'")
     return _fetch_and_cache(provider_key, days=days)
 
 
 @app.get("/api/anomalies")
-def anomalies(provider: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+def anomalies(provider: str | None = None, limit: int = 20, session: dict = Depends(auth.require_session)) -> list[dict[str, Any]]:
     return get_anomaly_history(provider, limit)
 
 
 @app.get("/api/aws/instances")
-def aws_instances() -> dict[str, Any]:
+def aws_instances(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     """
     Live EC2 instance inventory across all enabled regions: state, type,
     uptime, and trailing-24h CPU utilization. Requires the IAM user to have
@@ -430,7 +430,7 @@ def aws_instances() -> dict[str, Any]:
 
 
 @app.get("/api/aws/usage-breakdown")
-def aws_usage_breakdown(days: int = 30) -> dict[str, Any]:
+def aws_usage_breakdown(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     """
     Deep AWS Cost Explorer breakdown by service, usage type, and region —
     shows exactly which AWS features/services are actively driving spend.
@@ -451,7 +451,7 @@ class SettingsPayload(BaseModel):
 
 
 @app.get("/api/settings")
-def get_settings() -> dict[str, Any]:
+def get_settings(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     return {
         "z_score_threshold": float(get_setting("z_score_threshold", str(app_config.z_score_threshold))),
         "min_dollar_delta": float(get_setting("min_dollar_delta", str(app_config.min_dollar_delta))),
@@ -460,7 +460,7 @@ def get_settings() -> dict[str, Any]:
 
 
 @app.post("/api/settings")
-def update_settings(payload: SettingsPayload) -> dict[str, str]:
+def update_settings(payload: SettingsPayload, session: dict = Depends(auth.require_session)) -> dict[str, str]:
     for field, value in payload.model_dump(exclude_none=True).items():
         set_setting(field, str(value))
     return {"status": "saved"}

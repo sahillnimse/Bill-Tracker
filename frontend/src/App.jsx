@@ -20,13 +20,34 @@ import "./App.css";
 function badgesFromOverview(overview) {
   if (!overview) return {};
   const badges = {};
-  const { providers } = overview;
-  if (providers?.runpod?.anomaly?.is_anomaly) badges.runpod = { className: "b-danger", text: "!" };
-  if (providers?.ms365?.new_ids_7d > 0) badges.ms = { className: "b-warn", text: `+${providers.ms365.new_ids_7d}` };
-  if (providers?.google_ads?.anomaly?.is_anomaly) badges.gads = { className: "b-warn", text: "!" };
-  if (providers?.aws?.anomaly?.is_anomaly) badges.aws = { className: "b-danger", text: "!" };
-  if (providers?.gworkspace?.anomaly?.is_anomaly) badges.gworkspace = { className: "b-warn", text: "!" };
-  return badges;
+  const keyByProvider = {
+    aws: "aws",
+    runpod: "runpod",
+    google_ads: "gads",
+    gworkspace: "gworkspace",
+    ms365: "ms",
+  };
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  for (const a of overview.active_anomalies || []) {
+    if (a.date !== todayStr) continue;
+    const key = keyByProvider[a.provider];
+    if (!key) continue;
+    if (!badges[key]) badges[key] = { className: "b-danger", count: 0 };
+    badges[key].count += 1;
+  }
+
+  const result = {};
+  for (const [key, { className, count }] of Object.entries(badges)) {
+    result[key] = { className, text: String(count) };
+  }
+
+  const newIds = overview.providers?.ms365?.new_ids_7d;
+  if (!result.ms && newIds > 0) {
+    result.ms = { className: "b-warn", text: `+${newIds}` };
+  }
+
+  return result;
 }
 
 function AppShell() {
@@ -39,7 +60,10 @@ function AppShell() {
     if (el) el.scrollTop = 0;
   }, [location.pathname]);
 
-  const anomalyCount = overview?.active_anomalies?.length || 0;
+  const todaysAnomalies = (overview?.active_anomalies || []).filter(
+    (a) => a.date === new Date().toISOString().slice(0, 10)
+  );
+  const anomalyCount = todaysAnomalies.length;
   const providerBadges = badgesFromOverview(overview);
 
   return (
