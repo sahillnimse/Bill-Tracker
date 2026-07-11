@@ -1,23 +1,78 @@
 """
-Lightweight SQLite cache so the dashboard doesn't re-call provider APIs
-(AWS Cost Explorer, Google Ads, etc - several of which are rate-limited or
-billed per-call) on every single page view. A manual "Sync now" or the
-background scheduler refreshes this.
+SQLite cache (local dev) / Postgres (production on Render) so the dashboard
+doesn't re-call provider APIs (AWS Cost Explorer, Google Ads, etc - several
+of which are rate-limited or billed per-call) on every single page view.
+A manual "Sync now" or the background scheduler refreshes this.
+
+Local dev: no DATABASE_URL set -> uses a SQLite file at ./data/spendwatch.db.
+Render prod: DATABASE_URL is auto-injected once a Postgres instance is
+attached to this service -> all storage (cache, users, sessions) lives there,
+so it survives deploys even on Render's free tier (no persistent disk needed).
 """
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-DB_PATH = Path(__file__).parent / "data" / "spendwatch.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
+USE_POSTGRES = bool(DATABASE_URL)
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+else:
+    DB_PATH = Path(__file__).parent / "data" / "spendwatch.db"
+
+
+class _ConnWrapper:
+    """Makes a psycopg2 connection accept SQLite-style '?' placeholders and
+    .execute()/.fetchone()/.fetchall() directly on the connection (like
+    sqlite3.Connection does), so call sites in cache.py/auth.py don't need
+    to know which backend is active."""
+
+    def __init__(self, raw_conn):
+        self._conn = raw_conn
+
+    def execute(self, sql: str, params: tuple = ()):
+        cur = self._conn.cursor()
+        if USE_POSTGRES:
+            sql = re.sub(r"\?", "%s", sql)
+        cur.execute(sql, params)
+        return cur
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+@contextmanager
+def get_conn():
+    if USE_POSTGRES:
+        raw = psycopg2.connect(DATABASE_URL)
+        conn = _ConnWrapper(raw)
+    else:
+        conn = sqlite3.connect(DB_PATH)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def _autoincrement_pk() -> str:
+    return "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
 
 
 def init_db() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not USE_POSTGRES:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         conn.execute(
             """
@@ -29,9 +84,9 @@ def init_db() -> None:
             """
         )
         conn.execute(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS anomaly_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {_autoincrement_pk()},
                 provider TEXT NOT NULL,
                 date TEXT NOT NULL,
                 message TEXT NOT NULL,
@@ -42,7 +97,14 @@ def init_db() -> None:
             )
             """
         )
-        existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(anomaly_history)").fetchall()]
+        if USE_POSTGRES:
+            existing_cols = [
+                r[0] for r in conn.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'anomaly_history'"
+                ).fetchall()
+            ]
+        else:
+            existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(anomaly_history)").fetchall()]
         if "method" not in existing_cols:
             conn.execute("ALTER TABLE anomaly_history ADD COLUMN method TEXT DEFAULT 'z_score'")
 
@@ -74,15 +136,6 @@ def init_db() -> None:
             """
         )
         conn.commit()
-
-
-@contextmanager
-def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 def set_provider_cache(provider: str, payload: dict[str, Any], days: int = 30) -> None:

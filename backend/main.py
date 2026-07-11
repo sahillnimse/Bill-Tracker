@@ -132,6 +132,27 @@ class AddUserPayload(BaseModel):
     name: str
 
 
+@app.post("/api/admin/bootstrap")
+def admin_bootstrap(payload: AddUserPayload) -> dict[str, Any]:
+    """One-time, no-login-required way to add the very first allowlist user
+    after a fresh/empty DB (e.g. right after the Postgres migration). Only
+    works while allowed_users is completely empty — once anyone exists, this
+    always 403s and you must use the logged-in /api/admin/users route."""
+    if list_allowed_users():
+        raise HTTPException(
+            status_code=403,
+            detail="Allowlist is not empty — use /api/admin/users (requires login) instead.",
+        )
+    email = payload.email.lower().strip()
+    name = payload.name.strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required.")
+    add_allowed_user(email, name)
+    return {"ok": True, "email": email, "name": name}
+
+
 @app.get("/api/admin/users")
 def admin_list_users(session: dict = Depends(auth.require_session)) -> list[dict[str, Any]]:
     return list_allowed_users()

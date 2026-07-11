@@ -27,3 +27,6 @@ qrcode[pil]==8.0
 
 # OAuth flow helper (used by generate_refresh_token.py)
 google-auth-oauthlib==1.2.1
+
+# Postgres (production DB on Render — used automatically when DATABASE_URL is set)
+psycopg2-binary==2.9.12
