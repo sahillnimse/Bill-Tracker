@@ -5,7 +5,7 @@ credentials in code. Each provider module pulls only the settings it needs.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -64,20 +64,27 @@ class Microsoft365Config:
     premium_license_cost: float = _get_float("MS365_PREMIUM_LICENSE_COST", 830.0)    # INR, same as standard unless you have a 3rd tier
 
 
+def _require_session_secret() -> str:
+    secret = os.getenv("AUTH_SESSION_SECRET")
+    if not secret:
+        raise RuntimeError(
+            "AUTH_SESSION_SECRET is not set. This signs login sessions — the app "
+            "will not start without it. Set it to a long random value in your "
+            "environment (Render/Railway env vars, or .env for local dev)."
+        )
+    return secret
+
+
 @dataclass(frozen=True)
 class AuthConfig:
-    # Reuses the same Azure AD app registration as MS365Config by default —
-    # just needs a Web platform redirect URI + delegated User.Read permission
-    # added on top of the existing app-only permissions. Can be split into a
-    # separate app registration later by setting these independently.
-    tenant_id: str = _get("AUTH_TENANT_ID") or _get("MS365_TENANT_ID")
-    client_id: str = _get("AUTH_CLIENT_ID") or _get("MS365_CLIENT_ID")
-    client_secret: str = _get("AUTH_CLIENT_SECRET") or _get("MS365_CLIENT_SECRET")
-    redirect_uri: str = _get("AUTH_REDIRECT_URI", "http://localhost:8000/api/auth/callback")
+    # TOTP-based login — no Microsoft OAuth involved. Users are added to the
+    # allowed_users DB table, then self-enroll an authenticator app (Microsoft
+    # Authenticator, Google Authenticator, Authy, etc via standard TOTP).
     frontend_url: str = _get("AUTH_FRONTEND_URL", "http://localhost:5173")
+    totp_issuer: str = _get("AUTH_TOTP_ISSUER", "SpendWatch")
     # Secret used to sign our own session cookie (JWT) after login succeeds.
-    # MUST be set to a long random value in .env for production use.
-    session_secret: str = _get("AUTH_SESSION_SECRET", "dev-only-insecure-secret-change-me")
+    # No insecure default — app refuses to start without this set.
+    session_secret: str = field(default_factory=_require_session_secret)
     session_ttl_hours: int = _get_int("AUTH_SESSION_TTL_HOURS", 24 * 7)  # 1 week
     cross_origin: bool = _get("AUTH_CROSS_ORIGIN", "false").lower() == "true"
 

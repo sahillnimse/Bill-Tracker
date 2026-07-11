@@ -20,8 +20,10 @@ google-api-python-client==2.163.0
 # Microsoft 365 + Outlook (Graph)
 msal==1.31.1
 
-# Auth (login with Microsoft)
+# Auth (TOTP login)
 PyJWT==2.10.1
+pyotp==2.9.0
+qrcode[pil]==8.0
 
 # OAuth flow helper (used by generate_refresh_token.py)
 google-auth-oauthlib==1.2.1

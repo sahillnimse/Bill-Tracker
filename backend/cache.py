@@ -54,6 +54,25 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS allowed_users (
+                email TEXT PRIMARY KEY,
+                name TEXT,
+                totp_secret TEXT,
+                enrolled INTEGER DEFAULT 0,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS revoked_sessions (
+                jti TEXT PRIMARY KEY,
+                expires_at REAL NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -179,4 +198,28 @@ def set_setting(key: str, value: str) -> None:
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, value),
         )
+        conn.commit()
+
+
+def revoke_session(jti: str, expires_at: float) -> None:
+    """Marks a session's JWT ID as revoked until its natural expiry."""
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO revoked_sessions (jti, expires_at) VALUES (?, ?) "
+            "ON CONFLICT(jti) DO NOTHING",
+            (jti, expires_at),
+        )
+        conn.commit()
+
+
+def is_session_revoked(jti: str) -> bool:
+    with get_conn() as conn:
+        row = conn.execute("SELECT 1 FROM revoked_sessions WHERE jti = ?", (jti,)).fetchone()
+    return row is not None
+
+
+def cleanup_expired_revocations() -> None:
+    """Drops revoked-session entries whose JWT would have expired anyway — keeps the table small."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM revoked_sessions WHERE expires_at < ?", (time.time(),))
         conn.commit()

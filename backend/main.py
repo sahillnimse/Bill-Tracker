@@ -15,12 +15,13 @@ from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import auth
 from config import auth_config
 from cache import (
+    cleanup_expired_revocations,
     cleanup_old_anomalies,
     get_anomaly_history,
     get_provider_cache,
@@ -42,8 +43,8 @@ from providers import runpod as runpod_provider
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("spendwatch.main")
 logger.info(
-    "AUTH CONFIG CHECK — cross_origin=%s redirect_uri=%s frontend_url=%s",
-    auth_config.cross_origin, auth_config.redirect_uri, auth_config.frontend_url,
+    "AUTH CONFIG CHECK — cross_origin=%s frontend_url=%s",
+    auth_config.cross_origin, auth_config.frontend_url,
 )
 
 app = FastAPI(title="SpendWatch API")
@@ -60,37 +61,21 @@ init_db()
 
 
 # ── Auth routes (no login required to hit these — they ARE the login flow) ──
-@app.get("/api/auth/login")
-def auth_login():
-    try:
-        url = auth.build_authorize_url()
-    except RuntimeError:
-        logger.exception("Auth misconfigured — missing tenant/client credentials")
-        return RedirectResponse(f"{auth_config.frontend_url}/?login_error=invalid_client")
-    return RedirectResponse(url)
+class EnrollStartPayload(BaseModel):
+    email: str
 
 
-@app.get("/api/auth/callback")
-def auth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
-    if error:
-        return RedirectResponse(f"{auth_config.frontend_url}/?login_error={error}")
+class EnrollConfirmPayload(BaseModel):
+    email: str
+    code: str
 
-    try:
-        if not code:
-            return RedirectResponse(f"{auth_config.frontend_url}/?login_error=missing_code")
 
-        auth.validate_state(state)
-        session_token = auth.verify_tenant_and_issue_session(code)
-    except HTTPException as exc:
-        error_map = {
-            400: "invalid_state",
-            401: "token_exchange_failed",
-            403: "foreign_tenant",
-        }
-        error_key = error_map.get(exc.status_code, "unknown_error")
-        return RedirectResponse(f"{auth_config.frontend_url}/?login_error={error_key}")
+class LoginPayload(BaseModel):
+    email: str
+    code: str
 
-    resp = RedirectResponse(auth_config.frontend_url)
+
+def _set_session_cookie(resp: JSONResponse, session_token: str) -> None:
     resp.set_cookie(
         key=auth.SESSION_COOKIE_NAME,
         value=session_token,
@@ -99,12 +84,33 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
         secure=auth_config.cross_origin,
         max_age=auth_config.session_ttl_hours * 3600,
     )
+
+
+@app.post("/api/auth/enroll/start")
+def auth_enroll_start(payload: EnrollStartPayload):
+    return auth.start_enrollment(payload.email)
+
+
+@app.post("/api/auth/enroll/confirm")
+def auth_enroll_confirm(payload: EnrollConfirmPayload):
+    session_token = auth.confirm_enrollment(payload.email, payload.code)
+    resp = JSONResponse({"ok": True})
+    _set_session_cookie(resp, session_token)
+    return resp
+
+
+@app.post("/api/auth/login")
+def auth_login(payload: LoginPayload):
+    session_token = auth.verify_login(payload.email, payload.code)
+    resp = JSONResponse({"ok": True})
+    _set_session_cookie(resp, session_token)
     return resp
 
 
 @app.post("/api/auth/logout")
-def auth_logout():
-    resp = RedirectResponse(auth_config.frontend_url)
+def auth_logout(session: dict = Depends(auth.require_session)):
+    auth.revoke_current_session(session)
+    resp = JSONResponse({"ok": True})
     resp.delete_cookie(
         auth.SESSION_COOKIE_NAME,
         samesite="none" if auth_config.cross_origin else "lax",
@@ -299,6 +305,7 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
         )
 
     cleanup_old_anomalies()
+    cleanup_expired_revocations()
     return data
 
 
@@ -331,15 +338,7 @@ def health() -> dict[str, str]:
     return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
 
 
-@app.get("/api/debug/auth-config")
-def debug_auth_config() -> dict[str, Any]:
-    """TEMPORARY — remove after confirming cross-origin cookie deployment."""
-    return {
-        "cross_origin": auth_config.cross_origin,
-        "redirect_uri": auth_config.redirect_uri,
-        "frontend_url": auth_config.frontend_url,
-        "cors_origin": repr(app_config.cors_origin),
-    }
+
 
 
 @app.get("/api/overview")
