@@ -1,22 +1,10 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import "./LoginPage.css";
 
-const ERROR_MESSAGES = {
-    access_denied: "Sign-in was cancelled.",
-    missing_code: "Microsoft didn't return a valid sign-in code. Please try again.",
-    invalid_client: "This app isn't configured correctly with Microsoft yet. Contact the SpendWatch admin.",
-    consent_required: "This app needs admin approval before you can sign in. Contact the SpendWatch admin.",
-    interaction_required: "Microsoft needs you to complete an extra verification step. Please try again.",
-    invalid_state: "Your sign-in session expired. Please try again.",
-    token_exchange_failed: "Microsoft sign-in failed. Please try again.",
-    foreign_tenant: "This account is not part of the authorized organization.",
-    unknown_error: "Sign-in failed. Please try again, or contact the SpendWatch admin if this keeps happening.",
-};
-
-function getErrorMessage(code) {
-    if (!code) return null;
-    return ERROR_MESSAGES[code] || "Sign-in failed. Please try again, or contact the SpendWatch admin if this keeps happening.";
+function getErrorMessage(message) {
+    if (!message) return null;
+    return message;
 }
 
 const PROVIDERS = [
@@ -238,25 +226,54 @@ function MarketingPanel() {
 }
 
 function SignInPanel() {
-    const { login } = useAuth();
-    const [authStage, setAuthStage] = useState("idle"); // idle | loading | success
+    const { login, enrollStart, enrollConfirm } = useAuth();
 
-    const errorMessage = useMemo(() => {
-        const params = new URLSearchParams(window.location.search);
-        return getErrorMessage(params.get("login_error"));
-    }, []);
+    // stage: "email" | "qr" | "code" | "submitting"
+    const [stage, setStage] = useState("email");
+    const [email, setEmail] = useState("");
+    const [code, setCode] = useState("");
+    const [qrDataUrl, setQrDataUrl] = useState(null);
+    const [errorMessage, setErrorMessage] = useState(null);
 
-    const handleClick = () => {
-        if (authStage !== "idle") return;
-        setAuthStage("loading");
-        setTimeout(() => setAuthStage("success"), 600);
-        setTimeout(() => login(), 1100);
+    const handleEmailSubmit = async (e) => {
+        e.preventDefault();
+        setErrorMessage(null);
+        setStage("submitting");
+        try {
+            const result = await enrollStart(email);
+            if (result.enrolled) {
+                setStage("code");
+            } else {
+                setQrDataUrl(result.qr_code_data_url);
+                setStage("qr");
+            }
+        } catch (err) {
+            setErrorMessage(getErrorMessage(err?.response?.data?.detail) || "Something went wrong. Please try again.");
+            setStage("email");
+        }
     };
 
-    const btnLabel =
-        authStage === "success" ? "Redirecting…" :
-            authStage === "loading" ? "Connecting…" :
-                "Sign in with Microsoft";
+    const handleQrContinue = () => {
+        setStage("code");
+    };
+
+    const handleCodeSubmit = async (e) => {
+        e.preventDefault();
+        setErrorMessage(null);
+        setStage("submitting");
+        try {
+            if (qrDataUrl) {
+                await enrollConfirm(email, code);
+            } else {
+                await login(email, code);
+            }
+            // AuthProvider's refresh() (called inside login/enrollConfirm) will
+            // update `user`, and the app router will move away from LoginPage.
+        } catch (err) {
+            setErrorMessage(getErrorMessage(err?.response?.data?.detail) || "Incorrect code. Please try again.");
+            setStage("code");
+        }
+    };
 
     return (
         <div className="login-panel login-panel--right">
@@ -271,7 +288,13 @@ function SignInPanel() {
 
                 <div className="login-brand">
                     <span className="login-brand-name">Sign in to SpendWatch</span>
-                    <span className="login-brand-sub">Use your Xarka Microsoft 365 account to continue.</span>
+                    <span className="login-brand-sub">
+                        {stage === "qr"
+                            ? "Scan this into Microsoft Authenticator to finish setup."
+                            : stage === "code"
+                                ? "Enter the 6-digit code from your authenticator app."
+                                : "Enter your authorized Xarka email to continue."}
+                    </span>
                 </div>
 
                 {errorMessage && (
@@ -284,50 +307,56 @@ function SignInPanel() {
                     </div>
                 )}
 
-                <button
-                    className={`login-btn${authStage === "loading" ? " login-btn--loading" : ""}${authStage === "success" ? " login-btn--success" : ""}`}
-                    onClick={handleClick}
-                    disabled={authStage !== "idle"}
-                >
-                    {authStage === "idle" && (
-                        <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true">
-                            <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-                            <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-                            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-                        </svg>
-                    )}
-                    {authStage === "loading" && <span className="login-btn-spinner" />}
-                    {authStage === "success" && (
-                        <svg className="login-btn-check" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    )}
-                    <span>{btnLabel}</span>
-                    {authStage === "idle" && (
-                        <svg className="login-btn-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M3 7h8M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    )}
-                </button>
+                {stage === "email" || stage === "submitting" && !qrDataUrl && code === "" ? (
+                    <form onSubmit={handleEmailSubmit}>
+                        <input
+                            className="login-input"
+                            type="email"
+                            required
+                            placeholder="you@xarka.in"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            disabled={stage === "submitting"}
+                        />
+                        <button className="login-btn" type="submit" disabled={stage === "submitting"}>
+                            <span>{stage === "submitting" ? "Checking…" : "Continue"}</span>
+                        </button>
+                    </form>
+                ) : null}
 
-                <div className="login-hint">You'll be redirected to Microsoft, then straight to your dashboard.</div>
+                {stage === "qr" && (
+                    <div className="login-qr-block">
+                        <img src={qrDataUrl} alt="Scan with Microsoft Authenticator" className="login-qr-img" />
+                        <button className="login-btn" onClick={handleQrContinue}>
+                            <span>I've scanned it — continue</span>
+                        </button>
+                    </div>
+                )}
 
-                <svg className="login-ekg" viewBox="0 0 400 40" preserveAspectRatio="none">
-                    <polyline
-                        className="login-ekg-line"
-                        fill="none"
-                        stroke="var(--accent)"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        points="0,20 40,20 54,20 62,4 70,36 78,20 96,20 120,20 132,20 140,8 148,32 156,20 172,20 400,20"
-                    />
-                </svg>
+                {(stage === "code" || (stage === "submitting" && (qrDataUrl || code !== ""))) && (
+                    <form onSubmit={handleCodeSubmit}>
+                        <input
+                            className="login-input"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                            required
+                            placeholder="6-digit code"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
+                            disabled={stage === "submitting"}
+                            autoFocus
+                        />
+                        <button className="login-btn" type="submit" disabled={stage === "submitting"}>
+                            <span>{stage === "submitting" ? "Verifying…" : "Sign in"}</span>
+                        </button>
+                    </form>
+                )}
 
                 <div className="login-footnote">
                     <span className="login-dot" />
-                    Restricted to Xarka's Microsoft 365 organization
+                    Restricted to Xarka's authorized user list
                 </div>
             </div>
 

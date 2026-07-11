@@ -6,7 +6,7 @@ export default function KpiCard({ accent, label, value, valueColor, delta, delta
       <div className="kc-val" style={valueColor ? { color: valueColor } : undefined}>
         {value}
       </div>
-      {delta && <div className={`kc-delta ${deltaClass || "d-flat"}`}>{delta}</div>}
+      {delta != null && delta !== "" && <div className={`kc-delta ${deltaClass || "d-flat"}`}>{delta}</div>}
     </div>
   );
 }

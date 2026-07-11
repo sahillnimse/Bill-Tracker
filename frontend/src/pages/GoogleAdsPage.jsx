@@ -54,7 +54,7 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
         <KpiCard accent="gads" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
         <KpiCard accent="gads" label={`Conversions (${days}d)`} value={data.total_conversions_period ?? 0} />
-        <KpiCard accent="gads" label={`ROAS (${days}d)`} value={`${data.roas}x`} valueColor="var(--ok)" />
+        <KpiCard accent="gads" label={`ROAS (${days}d)`} value={data.roas != null ? `${data.roas}x` : "—"} valueColor="var(--ok)" />
         <KpiCard accent="gads" label={`Avg CPC (${days}d)`} value={fmt(data.avg_cpc || 0)}
           delta={`CPM ${fmt(data.avg_cpm || 0)}`} deltaClass="d-flat" />
       </div>

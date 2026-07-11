@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [appPassword, setAppPassword] = useState("");
   const [recipients, setRecipients] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,18 +24,18 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaved(false);
+    setSaveError(null);
     try {
       await api.updateSettings({
         ...settings,
+        smtp_app_password: appPassword || undefined,
         smtp_sender_email: email || undefined,
         alert_recipients: recipients || undefined,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-    } catch {
-      // silently ignore for now — backend not wired yet
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setSaveError(err?.response?.data?.detail || "Failed to save settings. Please try again.");
     }
   };
 
@@ -57,7 +58,7 @@ export default function SettingsPage() {
           <input
             type="number" step="0.1" className="set-input"
             value={settings.z_score_threshold}
-            onChange={(e) => setSettings((s) => ({ ...s, z_score_threshold: parseFloat(e.target.value) }))}
+            onChange={(e) => { const v = parseFloat(e.target.value); setSettings((s) => ({ ...s, z_score_threshold: Number.isNaN(v) ? 0 : v })); }}
           />
         </div>
         <div className="set-row">
@@ -68,7 +69,7 @@ export default function SettingsPage() {
           <input
             type="number" className="set-input"
             value={settings.min_dollar_delta}
-            onChange={(e) => setSettings((s) => ({ ...s, min_dollar_delta: parseFloat(e.target.value) }))}
+            onChange={(e) => { const v = parseFloat(e.target.value); setSettings((s) => ({ ...s, min_dollar_delta: Number.isNaN(v) ? 0 : v })); }}
           />
         </div>
         <div className="set-row">
@@ -79,7 +80,7 @@ export default function SettingsPage() {
           <input
             type="number" className="set-input"
             value={settings.baseline_window_days}
-            onChange={(e) => setSettings((s) => ({ ...s, baseline_window_days: parseInt(e.target.value, 10) }))}
+            onChange={(e) => { const v = parseInt(e.target.value, 10); setSettings((s) => ({ ...s, baseline_window_days: Number.isNaN(v) ? 0 : v })); }}
           />
         </div>
       </div>
@@ -103,6 +104,7 @@ export default function SettingsPage() {
       <button className="set-save-btn" onClick={handleSave}>
         {saved ? "Saved ✓" : "Save settings"}
       </button>
+      {saveError && <div className="set-error">{saveError}</div>}
     </div>
   );
 }
