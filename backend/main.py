@@ -21,12 +21,14 @@ from pydantic import BaseModel
 import auth
 from config import auth_config
 from cache import (
+    add_allowed_user,
     cleanup_expired_revocations,
     cleanup_old_anomalies,
     get_anomaly_history,
     get_provider_cache,
     get_setting,
     init_db,
+    list_allowed_users,
     record_anomaly,
     set_provider_cache,
     set_setting,
@@ -122,6 +124,31 @@ def auth_logout(session: dict = Depends(auth.require_session)):
 @app.get("/api/auth/me")
 def auth_me(session: dict = Depends(auth.require_session)):
     return auth.get_current_user(session)
+
+
+# ── Admin: manage the allowlist from a deployed instance with no shell access ──
+class AddUserPayload(BaseModel):
+    email: str
+    name: str
+
+
+@app.get("/api/admin/users")
+def admin_list_users(session: dict = Depends(auth.require_session)) -> list[dict[str, Any]]:
+    return list_allowed_users()
+
+
+@app.post("/api/admin/users")
+def admin_add_user(payload: AddUserPayload, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    email = payload.email.lower().strip()
+    name = payload.name.strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required.")
+    added = add_allowed_user(email, name)
+    if not added:
+        raise HTTPException(status_code=409, detail=f"'{email}' is already on the allowlist.")
+    return {"ok": True, "email": email, "name": name}
 
 
 PROVIDERS = {

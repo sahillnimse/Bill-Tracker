@@ -201,6 +201,35 @@ def set_setting(key: str, value: str) -> None:
         conn.commit()
 
 
+def list_allowed_users() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT email, name, enrolled, created_at FROM allowed_users ORDER BY created_at DESC"
+        ).fetchall()
+    return [
+        {"email": r[0], "name": r[1], "enrolled": bool(r[2]), "created_at": r[3]}
+        for r in rows
+    ]
+
+
+def add_allowed_user(email: str, name: str) -> bool:
+    """Adds an email to the allowlist. Returns False if it was already present."""
+    email = email.lower().strip()
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT email FROM allowed_users WHERE email = ?", (email,)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO allowed_users (email, name, totp_secret, enrolled, created_at) "
+            "VALUES (?, ?, NULL, 0, ?)",
+            (email, name, time.time()),
+        )
+        conn.commit()
+    return True
+
+
 def revoke_session(jti: str, expires_at: float) -> None:
     """Marks a session's JWT ID as revoked until its natural expiry."""
     with get_conn() as conn:
