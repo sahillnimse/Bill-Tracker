@@ -190,7 +190,7 @@ ANOMALY_LABELS = {
 }
 
 # Providers whose fetch functions accept a `days` parameter
-DAYS_AWARE_PROVIDERS = {"aws", "google_ads"}
+DAYS_AWARE_PROVIDERS = {"aws", "google_ads", "e2e"}
 
 
 def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any]:

@@ -289,6 +289,41 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
     else:
         anomaly_drivers = []
 
+    # Detect all historical spikes in the loaded range
+    historical_spikes = []
+    for i in range(7, len(daily_series)):
+        date_str = daily_series[i]["date"]
+        val = daily_series[i]["value"]
+        if val <= 0:
+            continue
+        prev_vals = [daily_series[j]["value"] for j in range(max(0, i - 7), i)]
+        mean = sum(prev_vals) / len(prev_vals) if prev_vals else 0.0
+        if mean > 0 and val > mean * 1.3 and (val - mean) > 50.0:
+            sku_deltas = []
+            for sku, daily_map in node_type_daily.items():
+                sku_val = daily_map.get(date_str, 0.0)
+                sku_prev = [daily_map.get(all_days[j], 0.0) for j in range(max(0, i - 7), i)]
+                sku_mean = sum(sku_prev) / len(sku_prev) if sku_prev else 0.0
+                sku_delta = sku_val - sku_mean
+                if sku_val > 0:
+                    sku_deltas.append({
+                        "name": sku,
+                        "value": sku_val,
+                        "delta": sku_delta
+                    })
+            sku_deltas.sort(key=lambda x: x["delta"], reverse=True)
+            top_sku = sku_deltas[0]["name"] if sku_deltas else "General Charges"
+            top_delta = sku_deltas[0]["delta"] if sku_deltas else 0.0
+            historical_spikes.append({
+                "date": date_str,
+                "value": round(val, 2),
+                "baseline_mean": round(mean, 2),
+                "pct_increase": round(((val - mean) / mean * 100), 1),
+                "top_driver": top_sku,
+                "driver_increase": round(top_delta, 2)
+            })
+    historical_spikes.sort(key=lambda x: x["date"], reverse=True)
+
     return {
         "provider": "e2e",
         "today": today_cost,
@@ -304,6 +339,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
+        "historical_spikes": historical_spikes,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "empty_data_reason": empty_data_reason,
         "free_tier_hours_used": round(free_tier_hours_used, 2),

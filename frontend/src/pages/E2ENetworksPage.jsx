@@ -188,6 +188,50 @@ export default function E2ENetworksPage({ days = 30, syncVersion = 0 }) {
         </div>
       </div>
 
+      {data.historical_spikes && data.historical_spikes.length > 0 && (
+        <div className="panel panel--spikes">
+          <div className="panel-hdr">
+            <div className="panel-title">⚠️ Spend Spikes Analyzer</div>
+            <div className="panel-sub" style={{ fontSize: 12, color: "var(--t3)" }}>
+              Detects days where spend exceeded the trailing 7-day average by &gt; 30% and &gt; ₹50.
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+            {data.historical_spikes.map((spike, idx) => (
+              <div key={idx} style={{
+                background: "rgba(239, 68, 68, 0.03)",
+                border: "1px solid rgba(239, 68, 68, 0.12)",
+                borderRadius: 8,
+                padding: "14px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap"
+              }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 600, color: "var(--t1)", fontSize: 14 }}>{spike.date}</span>
+                    <span className="pill p-warn" style={{ color: "var(--danger)", background: "rgba(239, 68, 68, 0.1)" }}>
+                      +{spike.pct_increase}% spike
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--t2)", marginTop: 6 }}>
+                    Top Driver: <strong style={{ color: "var(--cyan)" }}>{spike.top_driver}</strong>
+                    {" "}(spiked by <span style={{ color: "var(--danger)", fontWeight: 500 }}>+{fmt(spike.driver_increase)}</span> vs baseline)
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 12, color: "var(--t3)" }}>Daily Spend</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--danger)", marginTop: 2 }}>{fmt(spike.value)}</div>
+                  <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>baseline: {fmt(spike.baseline_mean)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="panel">
         <div className="panel-hdr"><div className="panel-title">SKU / Node Type cost breakdown</div></div>
         <BreakdownPanel provider="e2e" items={data.node_breakdown} formatter={fmt} />

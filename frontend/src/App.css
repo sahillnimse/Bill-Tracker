@@ -1949,12 +1949,12 @@
 }
 
 /* ─── NEW SIDEBAR COLORS (append to App.css) ─── */
-.si.on.c-gworkspace::before {
-  background: rgba(74, 222, 128, 0.1);
+.si.on.c-e2e::before {
+  background: rgba(34, 211, 238, 0.1);
 }
 
-.si.c-gworkspace .si-bar {
-  background: var(--ga);
+.si.c-e2e .si-bar {
+  background: var(--cyan);
 }
 
 /* ─── LOADING / ERROR STATES ─── */

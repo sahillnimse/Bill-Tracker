@@ -12,7 +12,7 @@ const PROVIDERS = [
     { key: "runpod", label: "RunPod", color: "var(--runpod)" },
     { key: "gads", label: "Google Ads", color: "var(--gads)" },
     { key: "ms", label: "Microsoft 365", color: "var(--ms)" },
-    { key: "ga", label: "Workspace", color: "var(--ga)" },
+    { key: "e2e", label: "E2E Networks", color: "var(--cyan)" },
 ];
 
 const STATS = [
@@ -26,7 +26,7 @@ const ACTIVITY_LINES = [
     "RunPod billing polled",
     "Google Ads spend checked",
     "Microsoft 365 seats verified",
-    "Workspace storage scanned",
+    "E2E Networks billing updated",
 ];
 
 function useCountUp(target, isNumber, durationMs = 700) {
@@ -196,7 +196,7 @@ function MarketingPanel() {
                 </h1>
 
                 <p className="login-tagline">
-                    AWS, RunPod, Google Ads, Microsoft 365, and Google Workspace -
+                    AWS, RunPod, Google Ads, Microsoft 365, and E2E Networks -
                     tracked live, cross-checked for anomalies, built for Xarka.
                 </p>
 
