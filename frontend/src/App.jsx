@@ -7,7 +7,6 @@ import AwsPage from "./pages/AwsPage";
 import RunPodPage from "./pages/RunPodPage";
 import GoogleAdsPage from "./pages/GoogleAdsPage";
 import Microsoft365Page from "./pages/Microsoft365Page";
-import GoogleWorkspacePage from "./pages/GoogleWorkspacePage";
 import SettingsPage from "./pages/SettingsPage";
 import { useOverview } from "./hooks/useProviderData";
 import { CurrencyProvider } from "./context/CurrencyContext";
@@ -24,7 +23,6 @@ function badgesFromOverview(overview) {
     aws: "aws",
     runpod: "runpod",
     google_ads: "gads",
-    gworkspace: "gworkspace",
     ms365: "ms",
   };
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -87,7 +85,7 @@ function AppShell() {
             <Route path="/runpod" element={<RunPodPage days={days} syncVersion={syncVersion} />} />
             <Route path="/google-ads" element={<GoogleAdsPage days={days} syncVersion={syncVersion} />} />
             <Route path="/ms365" element={<Microsoft365Page days={days} syncVersion={syncVersion} />} />
-            <Route path="/gworkspace" element={<GoogleWorkspacePage days={days} syncVersion={syncVersion} />} />
+
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>

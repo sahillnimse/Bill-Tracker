@@ -44,9 +44,10 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
 
   const podSpendTotal = (data.gpu_breakdown || []).reduce((sum, g) => sum + (g.amount || 0), 0);
   const serverlessSpendTotal = (data.endpoint_breakdown || []).reduce((sum, e) => sum + (e.amount || 0), 0);
-  const podVsServerlessTotal = podSpendTotal + serverlessSpendTotal || 1;
-  const podSharePct = Math.round((podSpendTotal / podVsServerlessTotal) * 100);
-  const serverlessSharePct = Math.round((serverlessSpendTotal / podVsServerlessTotal) * 100);
+  const podVsServerlessTotal = podSpendTotal + serverlessSpendTotal;
+  const podVsServerlessDenom = podVsServerlessTotal || 1; // safe denominator only — never shown in UI
+  const podSharePct = Math.round((podSpendTotal / podVsServerlessDenom) * 100);
+  const serverlessSharePct = Math.round((serverlessSpendTotal / podVsServerlessDenom) * 100);
 
   return (
     <div className="page" id="page-runpod">
@@ -266,7 +267,7 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
       <div className="panel">
         <div className="panel-hdr">
           <div className="panel-title">Pods vs serverless - where the money went</div>
-          <div className="panel-stat">{fmt(podVsServerlessTotal)} total, {days}d</div>
+          <div className="panel-stat">{fmt(podVsServerlessTotal || 0)} total, {days}d</div>
         </div>
         <div className="capacity-split">
           <div className="capacity-row">

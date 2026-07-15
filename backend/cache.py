@@ -29,6 +29,21 @@ if USE_POSTGRES:
 else:
     DB_PATH = Path(__file__).parent / "data" / "spendwatch.db"
 
+def _sqlite_placeholders_to_psycopg2(sql: str) -> str:
+    """Convert SQLite '?' placeholders to psycopg2 '%s', skipping any '?'
+    that appears inside a single- or double-quoted string literal."""
+    out = []
+    in_squote = in_dquote = False
+    for ch in sql:
+        if ch == "'" and not in_dquote:
+            in_squote = not in_squote
+        elif ch == '"' and not in_squote:
+            in_dquote = not in_dquote
+        if ch == "?" and not in_squote and not in_dquote:
+            out.append("%s")
+        else:
+            out.append(ch)
+    return "".join(out)
 
 class _ConnWrapper:
     """Makes a psycopg2 connection accept SQLite-style '?' placeholders and
@@ -42,7 +57,7 @@ class _ConnWrapper:
     def execute(self, sql: str, params: tuple = ()):
         cur = self._conn.cursor()
         if USE_POSTGRES:
-            sql = re.sub(r"\?", "%s", sql)
+            sql = _sqlite_placeholders_to_psycopg2(sql)
         cur.execute(sql, params)
         return cur
 
@@ -304,4 +319,4 @@ def cleanup_expired_revocations() -> None:
     """Drops revoked-session entries whose JWT would have expired anyway — keeps the table small."""
     with get_conn() as conn:
         conn.execute("DELETE FROM revoked_sessions WHERE expires_at < ?", (time.time(),))
-        conn.commit()
+        conn.commit()   

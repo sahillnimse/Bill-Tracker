@@ -37,7 +37,6 @@ from config import app_config
 from providers import aws as aws_provider
 from providers import aws_resources
 from providers import google_ads as google_ads_provider
-from providers import google_workspace as gworkspace_provider
 from providers import microsoft365 as ms365_provider
 from providers import runpod as runpod_provider
 # mock_fallback intentionally not imported — no fake data served to frontend
@@ -177,7 +176,6 @@ PROVIDERS = {
     "runpod": runpod_provider.fetch_runpod_data,
     "google_ads": google_ads_provider.fetch_google_ads_data,
     "ms365": ms365_provider.fetch_ms365_data,
-    "gworkspace": gworkspace_provider.fetch_gworkspace_data,
 }
 
 ANOMALY_LABELS = {
@@ -185,11 +183,10 @@ ANOMALY_LABELS = {
     "runpod": "RunPod",
     "google_ads": "Google Ads",
     "ms365": "Microsoft 365",
-    "gworkspace": "Google Workspace",
 }
 
 # Providers whose fetch functions accept a `days` parameter
-DAYS_AWARE_PROVIDERS = {"gworkspace", "aws", "google_ads"}
+DAYS_AWARE_PROVIDERS = {"aws", "google_ads"}
 
 
 def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any]:
@@ -266,24 +263,6 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
             "_status": "error",
             "_error": error_msg,
         }
-    elif provider_key == "gworkspace":
-        return {
-            "provider": "gworkspace",
-            "seats": 0,
-            "monthly_cost": 0.0,
-            "cost_per_seat": 0.0,
-            "cost_per_gb": 0.0,
-            "total_storage_gb": 0.0,
-            "active_users": 0,
-            "drive_events_today": 0.0,
-            "avg_drive_events_per_day": 0.0,
-            "daily_series": [{"date": today_iso, "value": 0.0}],
-            "top_users": [],
-            "domain": "unknown",
-            "anomaly": default_anomaly,
-            "_status": "error",
-            "_error": error_msg,
-        }
     return {
         "provider": provider_key,
         "_status": "error",
@@ -295,8 +274,6 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
     try:
         if provider_key == "aws":
             data = aws_provider.fetch_aws_data(days=days)
-        elif provider_key == "gworkspace":
-            data = gworkspace_provider.fetch_gworkspace_data(days=days)
         elif provider_key == "runpod":
             data = runpod_provider.fetch_runpod_data(days=days)
         elif provider_key == "google_ads":
@@ -393,10 +370,9 @@ def health() -> dict[str, str]:
 def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     """Aggregated snapshot across all providers for the Overview page."""
     data = _fetch_all_parallel(lambda key: _get_provider_data(key, days=days))
-    # All active providers report spend already normalized to USD by their
-    # respective fetch functions (currency conversion happens backend-side).
-    # gworkspace is excluded because it reports a fixed monthly license cost
-    # rather than a daily variable spend, which skews the "today" total.
+    # All active providers report spend normalized to USD by their fetch functions.
+    # ms365 is included but contributes 0 to today/MTD totals because it returns
+    # monthly_bill (INR) rather than a today/month_to_date key — harmless.
     USD_SPEND_PROVIDERS = {"aws", "runpod", "google_ads", "ms365"}
     today_total = sum(
         d.get("today", 0) or 0

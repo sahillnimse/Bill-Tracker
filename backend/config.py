@@ -89,13 +89,6 @@ class AuthConfig:
     cross_origin: bool = _get("AUTH_CROSS_ORIGIN", "false").lower() == "true"
 
 
-@dataclass(frozen=True)
-class GoogleWorkspaceConfig:
-    admin_email: str = _get("GWORKSPACE_ADMIN_EMAIL")
-    service_account_json: str = _get("GWORKSPACE_SERVICE_ACCOUNT_JSON_PATH")
-    seats: int = _get_int("GWORKSPACE_SEATS", 0)
-    cost_per_seat: float = _get_float("GWORKSPACE_COST_PER_SEAT", 12.0)
-    domain: str = _get("GWORKSPACE_DOMAIN")
 
 
 @dataclass(frozen=True)
@@ -119,6 +112,5 @@ runpod_config = RunPodConfig()
 google_ads_config = GoogleAdsConfig()
 ms365_config = Microsoft365Config()
 auth_config = AuthConfig()
-gworkspace_config = GoogleWorkspaceConfig()
 smtp_config = SMTPConfig()
 app_config = AppConfig()

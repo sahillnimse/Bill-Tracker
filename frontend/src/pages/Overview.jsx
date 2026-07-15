@@ -3,6 +3,11 @@ import Sparkline from "../components/Sparkline";
 import AnomalyHistory from "../components/AnomalyHistory";
 import { useCurrency } from "../context/CurrencyContext";
 
+function fmtINR(value) {
+  if (value === null || value === undefined) return "—";
+  return "₹" + Math.round(value).toLocaleString("en-IN");
+}
+
 function pipClass(provider) {
   if (provider?.anomaly?.is_anomaly) return "pip-danger";
   if (provider?._status === "stale" || provider?._status === "error") return "pip-warn";
@@ -29,7 +34,6 @@ export default function Overview({ overview, loading, error }) {
   const providerLabel = (name) => {
     if (name === "google_ads") return "Google Ads";
     if (name === "ms365") return "Microsoft 365";
-    if (name === "gworkspace") return "Google Workspace";
     if (name === "aws") return "AWS";
     if (name === "runpod") return "RunPod";
     return name;
@@ -52,7 +56,6 @@ export default function Overview({ overview, loading, error }) {
     .map(([name]) => {
       if (name === "google_ads") return "Google Ads";
       if (name === "ms365") return "Microsoft 365";
-      if (name === "gworkspace") return "Google Workspace";
       if (name === "aws") return "AWS";
       if (name === "runpod") return "RunPod";
       return name.toUpperCase();
@@ -83,11 +86,11 @@ export default function Overview({ overview, loading, error }) {
 
           <svg className="hero-ekg" viewBox="0 0 300 40" preserveAspectRatio="none">
             <polyline
-               points="0,22 30,22 38,8 46,34 54,18 90,18 130,18 138,4 146,30 154,18 220,18 228,10 236,28 244,18 300,18"
-               fill="none"
-               stroke="var(--amber)"
-               strokeWidth="1.5"
-               opacity="0.8"
+              points="0,22 30,22 38,8 46,34 54,18 90,18 130,18 138,4 146,30 154,18 220,18 228,10 236,28 244,18 300,18"
+              fill="none"
+              stroke="var(--amber)"
+              strokeWidth="1.5"
+              opacity="0.8"
             />
           </svg>
 
@@ -205,9 +208,9 @@ export default function Overview({ overview, loading, error }) {
         </div>
           <div style={{ display: "flex", gap: 22 }}>
             <div><div className="pc-stat-label">Users</div><div className="pc-stat-val" style={{ color: "var(--ms)" }}>{ms365.total_licenses ?? "—"}</div></div>
-            <div><div className="pc-stat-label">Monthly bill</div><div className="pc-stat-val">{fmt(ms365.monthly_bill)}</div></div>
+            <div><div className="pc-stat-label">Monthly bill</div><div className="pc-stat-val">{fmtINR(ms365.monthly_bill)}</div></div>
             <div><div className="pc-stat-label">New IDs (7d)</div><div className="pc-stat-val" style={{ color: "var(--warn)" }}>+{ms365.new_ids_7d ?? 0}</div></div>
-            <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmt(ms365.cost_per_user)}</div></div>
+            <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmtINR(ms365.cost_per_user)}</div></div>
           </div>
         </div>
       </div>

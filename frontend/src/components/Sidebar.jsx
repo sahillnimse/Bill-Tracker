@@ -4,7 +4,6 @@ const NAV_ITEMS = [
   { path: "/aws", key: "aws", label: "AWS", color: "var(--aws)" },
   { path: "/runpod", key: "runpod", label: "RunPod", color: "var(--runpod)" },
   { path: "/google-ads", key: "gads", label: "Google Ads", color: "var(--gads)" },
-  { path: "/gworkspace", key: "gworkspace", label: "Google Workspace", color: "var(--ga)" },
   { path: "/ms365", key: "ms", label: "Microsoft 365", color: "var(--ms)" },
 ];
 

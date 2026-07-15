@@ -250,11 +250,18 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     ]
 
     today_str = today_utc.isoformat()
+    yesterday_str = (today_utc - timedelta(days=1)).isoformat()
     today_cost = round(daily_totals.get(today_str, 0.0), 2)
+    yesterday_cost = round(daily_totals.get(yesterday_str, 0.0), 2)
     today_gpu_hours = round(daily_hours.get(today_str, 0.0), 2)
 
     month_str = today_utc.strftime("%Y-%m")
     mtd_total = round(sum(v for d, v in daily_totals.items() if d.startswith(month_str)), 2)
+
+    # avg_per_day: mean over days that actually had spend (excludes today, which
+    # may be incomplete). Falls back to 0 if there's no prior-day history yet.
+    days_with_prior_spend = [v for d, v in daily_totals.items() if d != today_str and v > 0]
+    avg_per_day = round(sum(days_with_prior_spend) / len(days_with_prior_spend), 4) if days_with_prior_spend else 0.0
 
     total_gpu_cost = sum(gpu_costs.values()) or 1.0
     gpu_breakdown = [
@@ -362,6 +369,8 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     return {
         "provider": "runpod",
         "today": today_cost,
+        "yesterday": yesterday_cost,
+        "avg_per_day": avg_per_day,
         "active_pods_count": running_count,
         "gpu_hours_today": today_gpu_hours,
         "month_to_date": mtd_total,
