@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { path: "/runpod", key: "runpod", label: "RunPod", color: "var(--runpod)", icon: "⚡" },
   { path: "/google-ads", key: "gads", label: "Google Ads", color: "var(--gads)", icon: "📣" },
   { path: "/ms365", key: "ms", label: "Microsoft 365", color: "var(--ms)", icon: "🪟" },
+  { path: "/e2e", key: "e2e", label: "E2E Networks", color: "var(--cyan)", icon: "🚀" },
 ];
 
 export default function Sidebar({ anomalyCount = 0, providerBadges = {}, collapsed = false, onToggle }) {

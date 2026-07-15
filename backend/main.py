@@ -40,6 +40,7 @@ from providers import aws_resources
 from providers import google_ads as google_ads_provider
 from providers import microsoft365 as ms365_provider
 from providers import runpod as runpod_provider
+from providers import e2e_networks as e2e_provider
 # mock_fallback intentionally not imported — no fake data served to frontend
 
 logging.basicConfig(level=logging.INFO)
@@ -175,6 +176,7 @@ def admin_add_user(payload: AddUserPayload, session: dict = Depends(auth.require
 PROVIDERS = {
     "aws": aws_provider.fetch_aws_data,
     "runpod": runpod_provider.fetch_runpod_data,
+    "e2e": e2e_provider.fetch_e2e_data,
     "google_ads": google_ads_provider.fetch_google_ads_data,
     "ms365": ms365_provider.fetch_ms365_data,
 }
@@ -182,6 +184,7 @@ PROVIDERS = {
 ANOMALY_LABELS = {
     "aws": "AWS",
     "runpod": "RunPod",
+    "e2e": "E2E Networks",
     "google_ads": "Google Ads",
     "ms365": "Microsoft 365",
 }
@@ -264,6 +267,24 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
             "_status": "error",
             "_error": error_msg,
         }
+    elif provider_key == "e2e":
+        return {
+            "provider": "e2e",
+            "today": 0.0,
+            "active_nodes_count": 0,
+            "gpu_hours_today": 0.0,
+            "cpu_hours_today": 0.0,
+            "month_to_date": 0.0,
+            "daily_series": [{"date": today_iso, "value": 0.0}],
+            "nodes": [],
+            "node_breakdown": [],
+            "anomaly": default_anomaly,
+            "_status": "error",
+            "_error": error_msg,
+            "empty_data_reason": "Unable to verify billing data — check E2E Networks API key configuration.",
+            "free_tier_hours_used": 0.0,
+            "free_tier_hours_remaining": 2.0,
+        }
     return {
         "provider": provider_key,
         "_status": "error",
@@ -277,6 +298,8 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
             data = aws_provider.fetch_aws_data(days=days)
         elif provider_key == "runpod":
             data = runpod_provider.fetch_runpod_data(days=days)
+        elif provider_key == "e2e":
+            data = e2e_provider.fetch_e2e_data(days=days)
         elif provider_key == "google_ads":
             data = google_ads_provider.fetch_google_ads_data(days=days)
         else:
@@ -416,6 +439,8 @@ def provider_monthly_spend(provider_key: str, year: int, month: int, session: di
         return aws_provider.fetch_aws_monthly_spend(year, month)
     if provider_key == "runpod":
         return runpod_provider.fetch_runpod_monthly_spend(year, month)
+    if provider_key == "e2e":
+        return e2e_provider.fetch_e2e_monthly_spend(year, month)
     if provider_key == "google_ads":
         return google_ads_provider.fetch_google_ads_monthly_spend(year, month)
     raise HTTPException(404, f"Monthly spend not supported for '{provider_key}'")

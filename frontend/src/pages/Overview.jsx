@@ -26,6 +26,7 @@ const PROVIDER_META = {
   runpod:    { icon: "⚡", color: "var(--runpod)", bg: "rgba(199,107,255,0.08)", label: "RunPod",              route: "/runpod" },
   google_ads:{ icon: "📣", color: "var(--gads)",   bg: "rgba(76,154,255,0.08)",  label: "Google Ads",         route: "/google-ads" },
   ms365:     { icon: "🪟", color: "var(--ms)",     bg: "rgba(0,229,212,0.08)",   label: "Microsoft 365",      route: "/ms365" },
+  e2e:       { icon: "🚀", color: "var(--cyan)",   bg: "rgba(0,229,212,0.06)",   label: "E2E Networks",        route: "/e2e" },
 };
 
 function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
@@ -34,20 +35,22 @@ function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
   const status = isAnomaly ? "Anomaly detected" : data?._status === "error" ? "Connection error" : "Normal";
   const pip = pipClass(data);
 
-  const today = name === "ms365" ? fmtINR(data?.monthly_bill) : fmt(data?.today);
-  const mtd   = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : fmt(data?.month_to_date);
+  const today = name === "ms365" ? fmtINR(data?.monthly_bill) : name === "e2e" ? fmtINR(data?.today) : fmt(data?.today);
+  const mtd   = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : name === "e2e" ? fmtINR(data?.month_to_date) : fmt(data?.month_to_date);
 
-  const thirdLabel = name === "aws" ? "vs avg" : name === "runpod" ? "vs avg" : name === "google_ads" ? "ROAS" : "New IDs 7d";
+  const thirdLabel = name === "aws" ? "vs avg" : name === "runpod" ? "vs avg" : name === "google_ads" ? "ROAS" : name === "e2e" ? "Active nodes" : "New IDs 7d";
   const thirdVal   = name === "aws" || name === "runpod"
     ? (data?.anomaly?.pct_vs_baseline != null
         ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}%`
         : "—")
     : name === "google_ads"
     ? (data?.roas != null ? `${data.roas}×` : "—")
+    : name === "e2e"
+    ? String(data?.active_nodes_count ?? "—")
     : `+${data?.new_ids_7d ?? 0}`;
   const thirdColor = (name === "aws" || name === "runpod") && isAnomaly ? "var(--danger)" : name === "google_ads" ? "var(--ok)" : "var(--warn)";
 
-  const sparkColor = { aws: "#f97316", runpod: "#e879f9", google_ads: "#3b82f6", ms365: "#00E5D4" }[name] || "#888";
+  const sparkColor = { aws: "#f97316", runpod: "#e879f9", google_ads: "#3b82f6", ms365: "#00E5D4", e2e: "#22d3ee" }[name] || "#888";
 
   return (
     <div
@@ -127,6 +130,7 @@ export default function Overview({ overview, loading, error }) {
     if (name === "ms365") return "Microsoft 365";
     if (name === "aws") return "AWS";
     if (name === "runpod") return "RunPod";
+    if (name === "e2e") return "E2E Networks";
     return name;
   };
 
@@ -260,7 +264,7 @@ export default function Overview({ overview, loading, error }) {
       </div>
 
       <div className="ov-grid2">
-        {["aws", "runpod", "google_ads", "ms365"].map((key) => (
+        {["aws", "runpod", "google_ads", "ms365", "e2e"].map((key) => (
           <ProviderCard
             key={key}
             name={key}

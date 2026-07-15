@@ -42,6 +42,14 @@ class RunPodConfig:
     api_key: str = _get("RUNPOD_API_KEY")
 
 
+@dataclass(frozen=True)
+class E2EConfig:
+    api_key: str = _get("E2E_API_KEY")
+    project_id: int = _get_int("E2E_PROJECT_ID", 0)
+    location: str = _get("E2E_LOCATION", "Delhi")
+
+
+
 
 @dataclass(frozen=True)
 class GoogleAdsConfig:
@@ -109,6 +117,7 @@ class AppConfig:
 
 aws_config = AWSConfig()
 runpod_config = RunPodConfig()
+e2e_config = E2EConfig()
 google_ads_config = GoogleAdsConfig()
 ms365_config = Microsoft365Config()
 auth_config = AuthConfig()
