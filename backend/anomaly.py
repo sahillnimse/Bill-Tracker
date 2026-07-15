@@ -210,4 +210,41 @@ def compute_sma_series(
             }
         )
 
-    return annotated    
+    return annotated
+
+
+def compute_drivers(
+    dim_daily: dict[str, dict[str, float]],
+    sorted_days: list[str],
+    settings: AnomalySettings,
+    max_drivers: int = 3,
+) -> list[dict]:
+    """
+    For each sub-dimension, build a dense daily series aligned to sorted_days,
+    run detect_anomaly(), collect those that fired, sort by |delta| descending,
+    and return the top max_drivers as anomaly_drivers records.
+
+    Returns [] when no individual dimension crosses the threshold
+    (cost crept up broadly rather than one item spiking).
+
+    dim_daily: {dimension_name: {date_str: amount}}
+    sorted_days: chronological date list where sorted_days[-1] is today
+    """
+    if not sorted_days or not dim_daily:
+        return []
+
+    drivers = []
+    for name, day_map in dim_daily.items():
+        series = [day_map.get(d, 0.0) for d in sorted_days]
+        result = detect_anomaly(series, settings)
+        if result.is_anomaly:
+            drivers.append({
+                "name": name,
+                "today": result.today_value,
+                "baseline_mean": result.baseline_mean,
+                "delta": result.delta,
+                "pct_vs_baseline": result.pct_vs_baseline,
+            })
+
+    drivers.sort(key=lambda d: abs(d["delta"]), reverse=True)
+    return drivers[:max_drivers]

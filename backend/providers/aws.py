@@ -12,7 +12,7 @@ from typing import Any
 
 import boto3
 
-from anomaly import AnomalySettings, compute_sma_series, detect_anomaly, detect_anomaly_sma
+from anomaly import AnomalySettings, compute_drivers, compute_sma_series, detect_anomaly, detect_anomaly_sma
 from config import aws_config, app_config
 
 logger = logging.getLogger("spendwatch.aws")
@@ -194,6 +194,17 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     anomaly = detect_anomaly(daily_totals, settings)
     anomaly_sma = detect_anomaly_sma(daily_totals)
 
+    if anomaly.is_anomaly or anomaly_sma.is_anomaly:
+        # Pivot already-in-memory daily {date: {svc: amt}} → {svc: {date: amt}}
+        svc_daily: dict[str, dict[str, float]] = {}
+        for d in sorted_days:
+            for svc, amt in daily.get(d, {}).items():
+                bucket = svc_daily.setdefault(svc, {})
+                bucket[d] = bucket.get(d, 0.0) + amt
+        anomaly_drivers = compute_drivers(svc_daily, sorted_days, settings)
+    else:
+        anomaly_drivers = []
+
     today_str = sorted_days[-1] if sorted_days else today.isoformat()
     yesterday_total = daily_totals[-2] if len(daily_totals) >= 2 else 0.0
     today_total = daily_totals[-1] if daily_totals else 0.0
@@ -265,6 +276,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         "diagnostics": diagnostics,
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
+        "anomaly_drivers": anomaly_drivers,
         "region": aws_config.region,
         "as_of_date": today_str,
     }

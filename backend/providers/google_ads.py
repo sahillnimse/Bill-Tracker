@@ -11,7 +11,7 @@ import httpx
 
 from google.ads.googleads.client import GoogleAdsClient
 
-from anomaly import AnomalySettings, detect_anomaly, compute_sma_series, detect_anomaly_sma
+from anomaly import AnomalySettings, compute_drivers, detect_anomaly, compute_sma_series, detect_anomaly_sma
 from config import app_config, google_ads_config
 
 logger = logging.getLogger("spendwatch.google_ads")
@@ -306,6 +306,32 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         logger.warning("Google Ads wasted spend query unavailable: %s", exc)
         diagnostics["wasted_spend"] = "Wasted spend query unavailable"
 
+    # Per-campaign daily series for driver attribution — only fetched when anomaly fired
+    campaign_daily: dict[str, dict[str, float]] = {}
+    if anomaly.is_anomaly or anomaly_sma.is_anomaly:
+        try:
+            campaign_daily_query = f"""
+                SELECT campaign.name, segments.date, metrics.cost_micros
+                FROM campaign
+                WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
+                ORDER BY segments.date ASC
+            """
+            for r in _run_query(client, campaign_daily_query):
+                name = r.campaign.name
+                d = r.segments.date
+                cost = (r.metrics.cost_micros / 1_000_000) / exchange_rate
+                bucket = campaign_daily.setdefault(name, {})
+                bucket[d] = bucket.get(d, 0.0) + cost
+        except Exception as exc:
+            logger.warning("Google Ads campaign daily query for anomaly drivers unavailable: %s", exc)
+            diagnostics["anomaly_drivers"] = "Campaign daily query unavailable"
+
+    date_axis = [d["date"] for d in daily_series]
+    if (anomaly.is_anomaly or anomaly_sma.is_anomaly) and campaign_daily:
+        anomaly_drivers = compute_drivers(campaign_daily, date_axis, settings)
+    else:
+        anomaly_drivers = []
+
     return {
         "provider": "google_ads",
         "today": round(today_spend, 2),
@@ -324,4 +350,5 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         "diagnostics": diagnostics,
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
+        "anomaly_drivers": anomaly_drivers,
     }

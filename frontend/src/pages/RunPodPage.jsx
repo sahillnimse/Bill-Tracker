@@ -21,6 +21,13 @@ function pct(part = 0, total = 0) {
   return total > 0 ? Math.round((part / total) * 100) : 0;
 }
 
+function formatDrivers(drivers, fmt) {
+  if (!drivers?.length) return null;
+  return drivers
+    .map(d => `${d.name} (${d.delta > 0 ? "+" : ""}${fmt(d.delta)}, ${d.pct_vs_baseline > 0 ? "+" : ""}${d.pct_vs_baseline}% vs avg)`)
+    .join(", ");
+}
+
 export default function RunPodPage({ days = 30, syncVersion = 0 }) {
   const { data, loading, error } = useProvider("runpod", days, syncVersion);
   const [history, setHistory] = useState([]);
@@ -59,7 +66,9 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
             <div className="a-text">
               {fmt(data.today)} today vs baseline ~{fmt(data.anomaly.baseline_mean)}/day
               ({deltaPct > 0 ? "+" : ""}{deltaPct}%, z-score {data.anomaly.z_score}).
-              Check for runaway training jobs or forgotten sessions.
+              {formatDrivers(data.anomaly_drivers, fmt)
+                ? ` Driven by: ${formatDrivers(data.anomaly_drivers, fmt)}.`
+                : " Check for runaway training jobs or forgotten sessions."}
             </div>
           </div>
         </div>

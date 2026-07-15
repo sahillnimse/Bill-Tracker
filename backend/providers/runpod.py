@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from anomaly import AnomalySettings, detect_anomaly, detect_anomaly_sma
+from anomaly import AnomalySettings, compute_drivers, detect_anomaly, detect_anomaly_sma
 from config import app_config, runpod_config
 
 logger = logging.getLogger("spendwatch.runpod")
@@ -202,8 +202,8 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     daily_totals: dict[str, float] = {}
     daily_hours: dict[str, float] = {}
     gpu_costs: dict[str, float] = {}
+    gpu_daily: dict[str, dict[str, float]] = {}  # {gpu_type: {date: amount}}
     endpoint_costs: dict[str, float] = {}
-    # Per-endpoint day-by-day spend, for sparklines: {endpointId: {date: amount}}
     endpoint_daily: dict[str, dict[str, float]] = {}
 
     for row in pod_billing_rows:
@@ -215,6 +215,8 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         daily_totals[day] = daily_totals.get(day, 0.0) + amount
         daily_hours[day] = daily_hours.get(day, 0.0) + (ms / 3_600_000)
         gpu_costs[gpu] = gpu_costs.get(gpu, 0.0) + amount
+        gpu_bucket = gpu_daily.setdefault(gpu, {})
+        gpu_bucket[day] = gpu_bucket.get(day, 0.0) + amount
 
     for row in serverless_billing_rows:
         day = (row.get("time") or "")[:10]
@@ -366,6 +368,11 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     )
     anomaly = detect_anomaly([d["value"] for d in daily_series], settings)
     anomaly_sma = detect_anomaly_sma([d["value"] for d in daily_series])
+
+    if anomaly.is_anomaly or anomaly_sma.is_anomaly:
+        anomaly_drivers = compute_drivers(gpu_daily, all_days, settings)
+    else:
+        anomaly_drivers = []
     return {
         "provider": "runpod",
         "today": today_cost,
@@ -380,6 +387,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         "endpoint_breakdown": endpoint_breakdown,
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
+        "anomaly_drivers": anomaly_drivers,
         "as_of": datetime.now(timezone.utc).isoformat(),
         "empty_data_reason": empty_data_reason,
         # Aggregated stats

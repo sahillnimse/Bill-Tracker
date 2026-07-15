@@ -11,6 +11,13 @@ import { monthToDateLabel } from "../utils/dateRangeLabel";
 
 const CAMPAIGN_COLORS = ["var(--gads)", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
 
+function formatDrivers(drivers, fmt) {
+  if (!drivers?.length) return null;
+  return drivers
+    .map(d => `${d.name} (${d.delta > 0 ? "+" : ""}${fmt(d.delta)}, ${d.pct_vs_baseline > 0 ? "+" : ""}${d.pct_vs_baseline}% vs avg)`)
+    .join(", ");
+}
+
 export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
   const { data, loading, error } = useProvider("google_ads", days, syncVersion);
   const [history, setHistory] = useState([]);
@@ -43,6 +50,23 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
             <div className="a-title">API Connection Error</div>
             <div className="a-text">
               Failed to load live data for this provider: {data._error}. Please check credentials or API access.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAnomaly && (
+        <div className="a-banner">
+          <div className="a-icon">!</div>
+          <div>
+            <div className="a-title">Google Ads spend anomaly — today</div>
+            <div className="a-text">
+              {fmt(data.today)} today vs baseline ~{fmt(data.anomaly.baseline_mean)}/day
+              ({data.anomaly.pct_vs_baseline > 0 ? "+" : ""}{data.anomaly.pct_vs_baseline}%,
+              z-score {data.anomaly.z_score}).
+              {formatDrivers(data.anomaly_drivers, fmt)
+                ? ` Driven by: ${formatDrivers(data.anomaly_drivers, fmt)}.`
+                : " Review campaign-level spend below."}
             </div>
           </div>
         </div>

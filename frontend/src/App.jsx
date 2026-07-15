@@ -50,6 +50,7 @@ function badgesFromOverview(overview) {
 
 function AppShell() {
   const [days, setDays] = useState(30);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { data: overview, loading, syncing, error, syncAll, lastSyncedAt, syncVersion } = useOverview(days);
   const location = useLocation();
 
@@ -65,14 +66,17 @@ function AppShell() {
   const providerBadges = badgesFromOverview(overview);
 
   return (
-    <div className="shell">
+    <div className={`shell${sidebarCollapsed ? " shell--sb-collapsed" : ""}`}>
       <AnomalyToast anomalies={overview?.active_anomalies || []} />
-      <Sidebar anomalyCount={anomalyCount} providerBadges={providerBadges} /> 
+      <Sidebar
+        anomalyCount={anomalyCount}
+        providerBadges={providerBadges}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((c) => !c)}
+      />
       <main className="main">
         <Topbar
           syncedAt={lastSyncedAt}
-          onSync={syncAll}
-          syncing={syncing}
           days={days}
           onDaysChange={setDays}
         >

@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -488,3 +489,42 @@ def update_settings(payload: SettingsPayload, session: dict = Depends(auth.requi
     for field, value in payload.model_dump(exclude_none=True).items():
         set_setting(field, str(value))
     return {"status": "saved"}
+
+
+# ── Background Scheduler (Automatic Cache Warming) ──
+scheduler = BackgroundScheduler()
+
+
+def _refresh_all_providers() -> None:
+    logger.info("Starting background parallel provider cache refresh...")
+    try:
+        # Fetch and cache all providers in parallel using the existing ThreadPoolExecutor helper
+        _fetch_all_parallel(lambda key: _fetch_and_cache(key))
+        logger.info("Background provider refresh completed successfully")
+    except Exception:
+        logger.exception("Background provider refresh failed")
+
+
+@app.on_event("startup")
+def start_scheduler() -> None:
+    # Warm the cache immediately on boot so cold starts are eliminated right after deploy/restarts
+    _refresh_all_providers()
+    
+    interval = max(app_config.cache_ttl_seconds - 30, 60)
+    logger.info("Registering background cache scheduler with interval of %d seconds", interval)
+    
+    scheduler.add_job(
+        _refresh_all_providers,
+        "interval",
+        seconds=interval,
+        id="refresh_all_providers",
+        replace_existing=True,
+        max_instances=1,  # prevent overlapping refreshes if APIs run slow
+    )
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+def stop_scheduler() -> None:
+    logger.info("Stopping background cache scheduler...")
+    scheduler.shutdown()

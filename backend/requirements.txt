@@ -30,3 +30,4 @@ google-auth-oauthlib==1.2.1
 
 # Postgres (production DB on Render — used automatically when DATABASE_URL is set)
 psycopg2-binary==2.9.12
+apscheduler==3.10.4

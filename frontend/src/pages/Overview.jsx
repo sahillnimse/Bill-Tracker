@@ -8,25 +8,116 @@ function fmtINR(value) {
   return "₹" + Math.round(value).toLocaleString("en-IN");
 }
 
+function formatDrivers(drivers, fmt) {
+  if (!drivers?.length) return null;
+  return drivers
+    .map(d => `${d.name} (${d.delta > 0 ? "+" : ""}${fmt(d.delta)}, ${d.pct_vs_baseline > 0 ? "+" : ""}${d.pct_vs_baseline}% vs avg)`)
+    .join(", ");
+}
+
 function pipClass(provider) {
   if (provider?.anomaly?.is_anomaly) return "pip-danger";
   if (provider?._status === "stale" || provider?._status === "error") return "pip-warn";
   return "pip-ok";
 }
 
+const PROVIDER_META = {
+  aws:       { icon: "☁️", color: "var(--aws)",    bg: "rgba(255,159,67,0.08)",  label: "Amazon Web Services", route: "/aws" },
+  runpod:    { icon: "⚡", color: "var(--runpod)", bg: "rgba(199,107,255,0.08)", label: "RunPod",              route: "/runpod" },
+  google_ads:{ icon: "📣", color: "var(--gads)",   bg: "rgba(76,154,255,0.08)",  label: "Google Ads",         route: "/google-ads" },
+  ms365:     { icon: "🪟", color: "var(--ms)",     bg: "rgba(0,229,212,0.08)",   label: "Microsoft 365",      route: "/ms365" },
+};
+
+function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
+  const meta = PROVIDER_META[name] || {};
+  const isAnomaly = data?.anomaly?.is_anomaly;
+  const status = isAnomaly ? "Anomaly detected" : data?._status === "error" ? "Connection error" : "Normal";
+  const pip = pipClass(data);
+
+  const today = name === "ms365" ? fmtINR(data?.monthly_bill) : fmt(data?.today);
+  const mtd   = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : fmt(data?.month_to_date);
+
+  const thirdLabel = name === "aws" ? "vs avg" : name === "runpod" ? "vs avg" : name === "google_ads" ? "ROAS" : "New IDs 7d";
+  const thirdVal   = name === "aws" || name === "runpod"
+    ? (data?.anomaly?.pct_vs_baseline != null
+        ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}%`
+        : "—")
+    : name === "google_ads"
+    ? (data?.roas != null ? `${data.roas}×` : "—")
+    : `+${data?.new_ids_7d ?? 0}`;
+  const thirdColor = (name === "aws" || name === "runpod") && isAnomaly ? "var(--danger)" : name === "google_ads" ? "var(--ok)" : "var(--warn)";
+
+  const sparkColor = { aws: "#f97316", runpod: "#e879f9", google_ads: "#3b82f6", ms365: "#00E5D4" }[name] || "#888";
+
+  return (
+    <div
+      className={`pcard2 p-${name === "google_ads" ? "gads" : name === "ms365" ? "ms" : name}${isAnomaly ? " pcard2--anomaly" : ""}`}
+      style={{ "--pc-color": meta.color, "--pc-bg": meta.bg }}
+      onClick={() => onNavigate(meta.route)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === "Enter" && onNavigate(meta.route)}
+    >
+      <div className="pc2-accent-bar" />
+      <div className="pc2-shimmer" />
+
+      <div className="pc2-header">
+        <div className="pc2-icon">{meta.icon}</div>
+        <div className="pc2-meta">
+          <div className="pc2-name">{meta.label}</div>
+          <div className="pc2-status">
+            <span className={`pip ${pip}`} />
+            {status}
+          </div>
+        </div>
+        <svg className="pc2-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+
+      <div className="pc2-stats">
+        <div className="pc2-stat">
+          <div className="pc2-stat-label">{name === "ms365" ? "Monthly bill" : "Today"}</div>
+          <div className="pc2-stat-val" style={{ color: meta.color }}>{today}</div>
+        </div>
+        <div className="pc2-stat">
+          <div className="pc2-stat-label">{name === "ms365" ? "Users" : "MTD"}</div>
+          <div className="pc2-stat-val">{mtd}</div>
+        </div>
+        <div className="pc2-stat">
+          <div className="pc2-stat-label">{thirdLabel}</div>
+          <div className="pc2-stat-val" style={{ color: thirdColor }}>{thirdVal}</div>
+        </div>
+      </div>
+
+      {name !== "ms365" && (
+        <div className="pc2-spark">
+          <Sparkline series={data?.daily_series} color={sparkColor} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Overview({ overview, loading, error }) {
   const navigate = useNavigate();
   const { fmt } = useCurrency();
 
-  if (loading) return <div className="loading-state">Loading consolidated spend data…</div>;
+  if (loading) return (
+    <div className="page" id="page-overview">
+      <div className="skeleton-hero" />
+      <div className="ov-grid" style={{ marginTop: 24 }}>
+        {[1,2,3,4].map(i => <div key={i} className="skeleton-card" />)}
+      </div>
+    </div>
+  );
   if (error) return <div className="error-state">Couldn't load overview: {error}</div>;
   if (!overview) return null;
 
   const { providers, today_total, month_to_date_total, projected_month_end, active_anomalies } = overview;
-  const aws = providers.aws || {};
-  const runpod = providers.runpod || {};
-  const gads = providers.google_ads || {};
-  const ms365 = providers.ms365 || {};
+  const aws   = providers.aws        || {};
+  const runpod = providers.runpod    || {};
+  const gads  = providers.google_ads || {};
 
   const topAnomaly = active_anomalies?.[0];
   const providerCount = Object.keys(providers).length;
@@ -39,180 +130,146 @@ export default function Overview({ overview, loading, error }) {
     return name;
   };
 
-  const providerRoute = (name) => (name === "google_ads" ? "google-ads" : name);
-
   const yesterdayTotal = (aws.yesterday || 0) + (runpod.yesterday || 0) + (gads.yesterday || 0);
   const deltaPct = yesterdayTotal > 0
     ? Math.round(((today_total - yesterdayTotal) / yesterdayTotal) * 1000) / 10
     : 0;
+  const deltaUp = deltaPct > 0;
 
   const formattedToday = fmt(today_total);
-  const tCcy = formattedToday.match(/^\D+/)?.[0]?.trim() || "";
+  const tCcy    = formattedToday.match(/^\D+/)?.[0]?.trim() || "";
   const tDigits = formattedToday.replace(/^\D+/, "");
   const [tWhole, tDecimal] = tDigits.split(".");
 
   const errorProviders = Object.entries(providers)
     .filter(([, p]) => p?._status === "error")
-    .map(([name]) => {
-      if (name === "google_ads") return "Google Ads";
-      if (name === "ms365") return "Microsoft 365";
-      if (name === "aws") return "AWS";
-      if (name === "runpod") return "RunPod";
-      return name.toUpperCase();
-    });
+    .map(([name]) => providerLabel(name));
 
   return (
     <div className="page" id="page-overview">
-      {/* HERO LEDGER STRIP */}
-      <div className="hero">
-        <div className="hero-eyebrow">
-          <span className="live-dot"></span>
-          Today across {providerCount} providers
-        </div>
-        <div className="hero-row">
-          <div>
-            <div className="hero-figure">
-              <span className="ccy">{tCcy}</span>
-              {tWhole}
-              {tDecimal && <span className="cents">.{tDecimal}</span>}
+
+      {/* ── HERO ── */}
+      <div className="hero2">
+        <div className="hero2-bg" />
+        <div className="hero2-content">
+          <div className="hero2-eyebrow">
+            <span className="live-dot" />
+            Live · {providerCount} providers
+          </div>
+          <div className="hero2-figure-row">
+            <div>
+              <div className="hero2-figure">
+                <span className="hero2-ccy">{tCcy}</span>
+                {tWhole}
+                {tDecimal && <span className="hero2-cents">.{tDecimal}</span>}
+              </div>
+              <div className="hero2-sublabel">
+                Today's total spend
+                <span className={`hero2-delta ${deltaUp ? "delta-up" : "delta-dn"}`}>
+                  {deltaUp ? "▲" : "▼"} {Math.abs(deltaPct)}% vs yesterday
+                </span>
+              </div>
             </div>
-            <div className="hero-label">
-              vs {fmt(yesterdayTotal)} yesterday
-              {yesterdayTotal > 0 && (
-                <> · trending {deltaPct >= 0 ? "up" : "down"} {Math.abs(deltaPct)}%</>
-              )}
+
+            <div className="hero2-stats">
+              <div className="hero2-stat">
+                <div className="hero2-stat-val">{fmt(month_to_date_total)}</div>
+                <div className="hero2-stat-label">Month to date</div>
+              </div>
+              <div className="hero2-stat-div" />
+              <div className="hero2-stat">
+                <div className="hero2-stat-val" style={{ color: "var(--amber, #FFB020)" }}>{fmt(projected_month_end)}</div>
+                <div className="hero2-stat-label">Projected</div>
+              </div>
+              <div className="hero2-stat-div" />
+              <div className="hero2-stat">
+                <div className="hero2-stat-val" style={{ color: active_anomalies?.length > 0 ? "var(--danger)" : "var(--ok)" }}>
+                  {active_anomalies?.length || 0}
+                </div>
+                <div className="hero2-stat-label">Anomalies</div>
+              </div>
             </div>
           </div>
 
-          <svg className="hero-ekg" viewBox="0 0 300 40" preserveAspectRatio="none">
+          {/* EKG line */}
+          <svg className="hero2-ekg" viewBox="0 0 400 32" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="ekgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="var(--cyan)" stopOpacity="0" />
+                <stop offset="30%" stopColor="var(--cyan)" stopOpacity="0.7" />
+                <stop offset="60%" stopColor="var(--warn)" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="var(--cyan)" stopOpacity="0.2" />
+              </linearGradient>
+            </defs>
             <polyline
-              points="0,22 30,22 38,8 46,34 54,18 90,18 130,18 138,4 146,30 154,18 220,18 228,10 236,28 244,18 300,18"
+              points="0,18 40,18 52,6 62,28 72,14 120,14 175,14 186,3 196,24 206,14 280,14 292,8 302,22 312,14 400,14"
               fill="none"
-              stroke="var(--amber)"
-              strokeWidth="1.5"
-              opacity="0.8"
+              stroke="url(#ekgGrad)"
+              strokeWidth="1.8"
             />
           </svg>
-
-          <div className="hero-stats">
-            <div className="hstat">
-              <div className="hstat-val">{fmt(month_to_date_total)}</div>
-              <div className="hstat-label">Month to date</div>
-            </div>
-            <div className="hstat">
-              <div className="hstat-val" style={{ color: "var(--amber)" }}>{fmt(projected_month_end)}</div>
-              <div className="hstat-label">Projected</div>
-            </div>
-            <div className="hstat">
-              <div className="hstat-val" style={{ color: "var(--danger)" }}>{active_anomalies?.length || 0}</div>
-              <div className="hstat-label">Anomalies</div>
-            </div>
-          </div>
         </div>
-        <div className="ledger-tick"></div>
       </div>
 
-      {/* ANOMALY STRIP */}
+      {/* ── ANOMALY STRIP ── */}
       {topAnomaly && (
-        <div className="anomaly-strip">
-          <div className="a-icon">!</div>
-          <div className="a-text">
-            <b>{topAnomaly.provider} spend anomaly detected</b> — {topAnomaly.pct_vs_baseline > 0 ? "+" : ""}{topAnomaly.pct_vs_baseline}% vs baseline of {fmt(topAnomaly.baseline_mean)}/day.
+        <div className="anomaly-strip2">
+          <div className="anomaly-strip2-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+              <path d="M7 5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
           </div>
-          <div className="a-link" onClick={() => navigate(`/${topAnomaly.provider === "google_ads" ? "google-ads" : topAnomaly.provider}`)}>            View history →
+          <div className="anomaly-strip2-body">
+            <span className="anomaly-strip2-title">{providerLabel(topAnomaly.provider)} anomaly</span>
+            {" "}— {topAnomaly.pct_vs_baseline > 0 ? "+" : ""}{topAnomaly.pct_vs_baseline}% vs baseline of {fmt(topAnomaly.baseline_mean)}/day.
+            {(() => {
+              const drivers = providers?.[topAnomaly.provider]?.anomaly_drivers;
+              const text = formatDrivers(drivers, fmt);
+              return text ? ` Driven by: ${text}.` : null;
+            })()}
           </div>
+          <button
+            className="anomaly-strip2-cta"
+            onClick={() => navigate(`/${topAnomaly.provider === "google_ads" ? "google-ads" : topAnomaly.provider}`)}
+          >
+            Investigate →
+          </button>
         </div>
       )}
 
       {errorProviders.length > 0 && (
-        <div className="a-banner" style={{ marginBottom: 24, border: "1px solid rgba(245, 158, 11, 0.3)", background: "linear-gradient(135deg, rgba(245, 158, 11, 0.07), rgba(217, 70, 239, 0.02))" }}>
-          <div className="a-icon" style={{ background: "var(--orange)" }}>!</div>
+        <div className="info-banner">
+          <div className="info-banner-icon">⚠</div>
           <div>
-            <div className="a-title" style={{ color: "var(--orange)" }}>Provider Connection Notice</div>
-            <div className="a-text" style={{ color: "var(--t2)" }}>
-              Could not load live data for: {errorProviders.join(", ")}. Showing empty data. Please verify your .env credentials.
+            <div className="info-banner-title">Provider connection issue</div>
+            <div className="info-banner-text">
+              Could not load live data for: <b>{errorProviders.join(", ")}</b>. Please verify your .env credentials.
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid-label">Providers</div>
-      <div className="ov-grid">
-        <div className="pcard p-aws" onClick={() => navigate("/aws")}>
-          <div className="pc-hdr">
-            <div className="pc-icon" style={{ background: "rgba(249,115,22,.12)" }}>☁️</div>
-            <div>
-              <div className="pc-name">Amazon Web Services</div>
-              <div className="pc-status">
-                <span className={`pip ${pipClass(aws)}`}></span>
-                {aws.anomaly?.is_anomaly ? "Anomaly detected" : `Normal · ${aws.region || "—"}`}
-              </div>
-            </div>
-          </div>
-          <div className="pc-stats">
-            <div><div className="pc-stat-label">Today</div><div className="pc-stat-val" style={{ color: "var(--aws)" }}>{fmt(aws.today)}</div></div>
-            <div><div className="pc-stat-label">MTD</div><div className="pc-stat-val">{fmt(aws.month_to_date)}</div></div>
-            <div><div className="pc-stat-label">vs avg</div><div className="pc-stat-val" style={{ color: aws.anomaly?.is_anomaly ? "var(--danger)" : "var(--ok)" }}>{aws.anomaly?.pct_vs_baseline != null ? `${aws.anomaly.pct_vs_baseline > 0 ? "+" : ""}${aws.anomaly.pct_vs_baseline}%` : "—"}</div></div>
-          </div>
-          <div className="pc-spark"><Sparkline series={aws.daily_series} color="#f97316" /></div>
-        </div>
+      {/* ── PROVIDERS GRID ── */}
+      <div className="ov-section-label">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.5 }}>
+          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/>
+          <circle cx="6" cy="6" r="2" fill="currentColor"/>
+        </svg>
+        Providers
+      </div>
 
-        <div className="pcard p-runpod" onClick={() => navigate("/runpod")}>
-          <div className="pc-hdr">
-            <div className="pc-icon" style={{ background: "rgba(232,121,249,.12)" }}>⚡</div>
-            <div>
-              <div className="pc-name">RunPod</div>
-              <div className="pc-status">
-                <span className={`pip ${pipClass(runpod)}`}></span>
-                {runpod.anomaly?.is_anomaly ? "Anomaly · GPU spike" : "Normal"}
-              </div>
-            </div>
-          </div>
-          <div className="pc-stats">
-            <div><div className="pc-stat-label">Today</div><div className="pc-stat-val" style={{ color: runpod.anomaly?.is_anomaly ? "var(--danger)" : "var(--t1)" }}>{fmt(runpod.today)}</div></div>
-            <div><div className="pc-stat-label">MTD</div><div className="pc-stat-val">{fmt(runpod.month_to_date)}</div></div>
-            <div><div className="pc-stat-label">vs avg</div><div className="pc-stat-val" style={{ color: runpod.anomaly?.is_anomaly ? "var(--danger)" : "var(--ok)" }}>{runpod.anomaly?.pct_vs_baseline != null ? `${runpod.anomaly.pct_vs_baseline > 0 ? "+" : ""}${runpod.anomaly.pct_vs_baseline}%` : "—"}</div></div>
-          </div>
-          <div className="pc-spark"><Sparkline series={runpod.daily_series} color="#e879f9" /></div>
-        </div>
-
-
-        <div className="pcard p-gads" onClick={() => navigate("/google-ads")}>
-          <div className="pc-hdr">
-            <div className="pc-icon" style={{ background: "rgba(59,130,246,.12)" }}>📣</div>
-            <div>
-              <div className="pc-name">Google Ads</div>
-              <div className="pc-status">
-                <span className={`pip ${pipClass(gads)}`}></span>
-                {gads.anomaly?.is_anomaly ? "Anomaly · spend spike" : "Normal"}
-              </div>
-            </div>
-          </div>
-          <div className="pc-stats">
-            <div><div className="pc-stat-label">Today</div><div className="pc-stat-val" style={{ color: "var(--gads)" }}>{fmt(gads.today)}</div></div>
-            <div><div className="pc-stat-label">MTD</div><div className="pc-stat-val">{fmt(gads.month_to_date)}</div></div>
-            <div><div className="pc-stat-label">ROAS</div><div className="pc-stat-val" style={{ color: "var(--ok)" }}>{gads.roas ?? "—"}×</div></div>
-          </div>
-          <div className="pc-spark"><Sparkline series={gads.daily_series} color="#3b82f6" /></div>
-        </div>
-
-        <div className="pcard p-ms" onClick={() => navigate("/ms365")} style={{ gridColumn: "span 3" }}>            <div className="pc-hdr" style={{ marginBottom: 0 }}>
-          <div className="pc-icon" style={{ background: "rgba(6,182,212,.12)" }}>🪟</div>
-          <div>
-            <div className="pc-name">Microsoft 365</div>
-            <div className="pc-status">
-              <span className={`pip ${ms365.new_ids_7d > 0 ? "pip-warn" : "pip-ok"}`}></span>
-              {ms365.new_ids_7d > 0 ? `${ms365.new_ids_7d} new IDs this week` : "Stable"}
-            </div>
-          </div>
-        </div>
-          <div style={{ display: "flex", gap: 22 }}>
-            <div><div className="pc-stat-label">Users</div><div className="pc-stat-val" style={{ color: "var(--ms)" }}>{ms365.total_licenses ?? "—"}</div></div>
-            <div><div className="pc-stat-label">Monthly bill</div><div className="pc-stat-val">{fmtINR(ms365.monthly_bill)}</div></div>
-            <div><div className="pc-stat-label">New IDs (7d)</div><div className="pc-stat-val" style={{ color: "var(--warn)" }}>+{ms365.new_ids_7d ?? 0}</div></div>
-            <div><div className="pc-stat-label">Cost/user</div><div className="pc-stat-val">{fmtINR(ms365.cost_per_user)}</div></div>
-          </div>
-        </div>
+      <div className="ov-grid2">
+        {["aws", "runpod", "google_ads", "ms365"].map((key) => (
+          <ProviderCard
+            key={key}
+            name={key}
+            data={providers[key] || {}}
+            onNavigate={navigate}
+            fmt={fmt}
+            fmtINR={fmtINR}
+          />
+        ))}
       </div>
 
       {active_anomalies && active_anomalies.length > 0 && (

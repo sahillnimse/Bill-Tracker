@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useCurrency } from "../context/CurrencyContext";
 
 const RANGES = [
@@ -8,10 +9,23 @@ const RANGES = [
   { label: "6 months", days: 180 },
 ];
 
-export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange, children }) {
+const PAGE_LABELS = {
+  "/aws": "Amazon Web Services",
+  "/runpod": "RunPod",
+  "/google-ads": "Google Ads",
+  "/ms365": "Microsoft 365",
+  "/settings": "Settings",
+};
+
+export default function Topbar({ syncedAt, days, onDaysChange, children }) {
   const [open, setOpen] = useState(false);
   const dropRef = useRef(null);
   const { currency, toggle, rate, rateLoaded } = useCurrency();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isRoot = location.pathname === "/";
+  const pageLabel = PAGE_LABELS[location.pathname];
 
   const formattedTime = syncedAt
     ? new Date(syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
@@ -29,16 +43,28 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange, 
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  useEffect(() => {
-    // Auto sync on mount and when days change
-    onSync();
-  }, [onSync, days]);
   return (
     <div className="topbar">
-      <div style={{ display: "flex", gap: 3, alignItems: "center" }} />
+      <div className="tb-l">
+        {!isRoot && (
+          <button className="back-btn" onClick={() => navigate(-1)} title="Go back">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9 2L4 7L9 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back
+          </button>
+        )}
+        {pageLabel && (
+          <span className="tb-breadcrumb">
+            <span className="tb-bc-sep">{!isRoot && "/"}</span>
+            {pageLabel}
+          </span>
+        )}
+      </div>
+
       <div className="tb-r">
         <span className="sync-time">
-          {syncing ? "Syncing…" : `Synced ${formattedTime}`}
+          Synced {formattedTime}
         </span>
 
         {/* ── Currency toggle ── */}
@@ -71,7 +97,7 @@ export default function Topbar({ syncedAt, onSync, syncing, days, onDaysChange, 
               <rect x="1" y="8.8" width="5" height="1.2" rx=".6" fill="currentColor" opacity=".6" />
             </svg>
             {selectedLabel}
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transition: "transform .2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>
               <path d="M2.5 3.75L5 6.25L7.5 3.75" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>

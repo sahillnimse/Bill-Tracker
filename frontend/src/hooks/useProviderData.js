@@ -80,11 +80,10 @@ export function useProvider(providerKey, days = 30, refreshKey = 0) {
     }
   }, [providerKey, days]);
 
-  // On mount / days change: force a live fetch (bypasses cache) so the page
-  // never opens showing a stale snapshot.
+  // On mount / days change: read from cache first
   useEffect(() => {
-    sync();
-  }, [sync]);
+    load();
+  }, [load]);
 
   // Whenever the app-level sync (Topbar) completes, refresh this page too -
   // this is what makes an already-open page pick up new data live instead
