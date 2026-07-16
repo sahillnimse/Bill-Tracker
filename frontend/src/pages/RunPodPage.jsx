@@ -78,6 +78,16 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
         </div>
       )}
 
+      {data.anomaly?.is_anomaly && data.anomaly_explanation && (
+        <div className="a-banner" style={{ marginTop: 8 }}>
+          <div className="a-icon">i</div>
+          <div>
+            <div className="a-title">What does this mean?</div>
+            <div className="a-text">{data.anomaly_explanation}</div>
+          </div>
+        </div>
+      )}
+
       <div className="ph">
         <div className="ph-title"><span style={{ color: "var(--runpod)" }}>RunPod</span></div>
         <div className="ph-sub">

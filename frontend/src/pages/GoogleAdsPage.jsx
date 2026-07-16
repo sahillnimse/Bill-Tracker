@@ -76,6 +76,16 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
         </div>
       )}
 
+      {data.anomaly?.is_anomaly && data.anomaly_explanation && (
+        <div className="a-banner" style={{ marginTop: 8 }}>
+          <div className="a-icon">i</div>
+          <div>
+            <div className="a-title">What does this mean?</div>
+            <div className="a-text">{data.anomaly_explanation}</div>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-grid">
         <KpiCard accent="gads" label="Today spend" value={fmt(data.today)} valueColor="var(--gads)"
           delta={isAnomaly ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}% vs avg` : null}

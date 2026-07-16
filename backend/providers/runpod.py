@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from anomaly import AnomalySettings, compute_drivers, detect_anomaly, detect_anomaly_sma
+from anomaly import AnomalySettings, compute_drivers, detect_anomaly, detect_anomaly_sma, explain_anomaly
 from config import app_config, runpod_config
 
 logger = logging.getLogger("spendwatch.runpod")
@@ -436,6 +436,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
+        "anomaly_explanation": explain_anomaly("RunPod", anomaly, anomaly_drivers, currency_symbol="$"),
         "as_of": datetime.now(timezone.utc).isoformat(),
         "empty_data_reason": empty_data_reason,
         # Aggregated stats

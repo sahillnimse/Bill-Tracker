@@ -232,6 +232,11 @@ export default function Overview({ overview, loading, error }) {
               const text = formatDrivers(drivers, fmt);
               return text ? ` Driven by: ${text}.` : null;
             })()}
+            {providers?.[topAnomaly.provider]?.anomaly_explanation && (
+              <div className="a-text" style={{ marginTop: 6, opacity: 0.85 }}>
+                {providers[topAnomaly.provider].anomaly_explanation}
+              </div>
+            )}
           </div>
           <button
             className="anomaly-strip2-cta"

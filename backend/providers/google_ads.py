@@ -11,7 +11,7 @@ import httpx
 
 from google.ads.googleads.client import GoogleAdsClient
 
-from anomaly import AnomalySettings, compute_drivers, detect_anomaly, compute_sma_series, detect_anomaly_sma
+from anomaly import AnomalySettings, compute_drivers, detect_anomaly, compute_sma_series, detect_anomaly_sma, explain_anomaly
 from config import app_config, google_ads_config
 
 logger = logging.getLogger("spendwatch.google_ads")
@@ -391,4 +391,5 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
+        "anomaly_explanation": explain_anomaly("Google Ads", anomaly, anomaly_drivers, currency_symbol="$"),
     }

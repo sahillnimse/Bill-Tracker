@@ -12,7 +12,7 @@ from typing import Any
 
 import boto3
 
-from anomaly import AnomalySettings, compute_drivers, compute_sma_series, detect_anomaly, detect_anomaly_sma
+from anomaly import AnomalySettings, compute_drivers, compute_sma_series, detect_anomaly, detect_anomaly_sma, explain_anomaly
 from config import aws_config, app_config
 
 logger = logging.getLogger("spendwatch.aws")
@@ -331,6 +331,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
+        "anomaly_explanation": explain_anomaly("AWS", anomaly, anomaly_drivers, currency_symbol="$"),
         "region": aws_config.region,
         "as_of_date": today_str,
     }

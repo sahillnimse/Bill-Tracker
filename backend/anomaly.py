@@ -248,3 +248,57 @@ def compute_drivers(
 
     drivers.sort(key=lambda d: abs(d["delta"]), reverse=True)
     return drivers[:max_drivers]
+
+
+def explain_anomaly(provider_label: str, anomaly, drivers: list[dict], currency_symbol: str = "$") -> str:
+    """
+    Plain-English explanation of an anomaly for a non-technical reader.
+    Uses ONLY values already present on the anomaly object and drivers list
+    — never invents numbers.
+    provider_label: e.g. "AWS", "RunPod", "Google Ads"
+    anomaly: an AnomalyResult (has .is_anomaly, .today_value, .baseline_mean,
+             .pct_vs_baseline, .delta, .z_score)
+    drivers: list of dicts with keys name/today/baseline_mean/delta/pct_vs_baseline
+             (may be empty list)
+    currency_symbol: "$" for USD providers, "₹" for INR providers — caller
+             must pass the CORRECT symbol for that provider, matching
+             whatever this provider's fmt() already uses elsewhere in the
+             app. Do not hardcode this to "₹" — AWS/RunPod/Google Ads are
+             USD.
+    """
+    if not anomaly.is_anomaly:
+        return ""
+
+    direction_word = "increased" if anomaly.delta > 0 else "decreased"
+    comparison_word = "higher" if anomaly.delta > 0 else "lower"
+    pct = abs(anomaly.pct_vs_baseline)
+
+    sentence_1 = (
+        f"{provider_label} spend {direction_word} sharply today — "
+        f"{currency_symbol}{anomaly.today_value:,.0f} compared to a normal "
+        f"day of about {currency_symbol}{anomaly.baseline_mean:,.0f}, "
+        f"roughly {pct:.0f}% {comparison_word} than usual."
+    )
+
+    if drivers:
+        top = drivers[0]
+        driver_direction = "jumped to" if top["delta"] > 0 else "dropped to"
+        sentence_2 = (
+            f"Most of this change is coming from {top['name']}, which "
+            f"{driver_direction} {currency_symbol}{top['today']:,.0f} "
+            f"(normally around {currency_symbol}{top['baseline_mean']:,.0f})."
+        )
+        if len(drivers) > 1:
+            other_names = ", ".join(d["name"] for d in drivers[1:3])
+            sentence_3 = f" Other contributing factors: {other_names}."
+        else:
+            sentence_3 = ""
+    else:
+        sentence_2 = (
+            "The change wasn't concentrated in one specific area — it "
+            "looks like a broad shift across several items rather than "
+            "one clear cause."
+        )
+        sentence_3 = ""
+
+    return f"{sentence_1} {sentence_2}{sentence_3}"
