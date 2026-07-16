@@ -361,6 +361,51 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     total_savings_per_hr = sum(pod.get("savings_per_hr", 0.0) for pod in running_pods)
     total_running_gpus = sum(pod.get("gpu_count", 1) for pod in running_pods)
 
+    # Calculate last month same period
+    import calendar
+    if today_utc.month == 1:
+        last_year = today_utc.year - 1
+        last_month = 12
+    else:
+        last_year = today_utc.year
+        last_month = today_utc.month - 1
+        
+    _, last_month_days = calendar.monthrange(last_year, last_month)
+    last_day = min(today_utc.day, last_month_days)
+    
+    last_month_start_dt = datetime(last_year, last_month, 1, tzinfo=timezone.utc)
+    last_month_end_dt = datetime(last_year, last_month, last_day, tzinfo=timezone.utc) + timedelta(days=1)
+    
+    try:
+        last_pod_rows = _fetch_billing_range(last_month_start_dt, last_month_end_dt, kind="pods")
+        last_endpoint_rows = _fetch_billing_range(last_month_start_dt, last_month_end_dt, kind="endpoints")
+        last_month_same_period = sum(row.get("amount") or 0.0 for row in last_pod_rows + last_endpoint_rows)
+    except Exception as exc:
+        logger.warning("Failed to fetch prior month same period cost for RunPod: %s", exc)
+        last_month_same_period = 0.0
+
+    vs_last_month_pct = None
+    if last_month_same_period and last_month_same_period > 0:
+        vs_last_month_pct = round(((mtd_total - last_month_same_period) / last_month_same_period) * 100, 1)
+
+    # Projected month end
+    days_in_month = calendar.monthrange(today_utc.year, today_utc.month)[1]
+    days_elapsed = today_utc.day
+    projected_month_end = round((mtd_total / days_elapsed) * days_in_month, 2) if days_elapsed > 0 else 0.0
+
+    # Possible idle pods (running GPU pods with uptime > 7 days)
+    possible_idle_pods = [
+        {
+            "id": pod["id"],
+            "name": pod["name"],
+            "uptime_seconds": pod["uptime_seconds"],
+            "cost_per_hr": pod["adjusted_cost_per_hr"],
+            "gpu": pod["gpu"]
+        }
+        for pod in pods_out
+        if pod["status"] == "RUNNING" and pod["uptime_seconds"] > 7 * 86400
+    ]
+
     settings = AnomalySettings(
         z_threshold=app_config.z_score_threshold,
         min_dollar_delta=app_config.min_dollar_delta,
@@ -381,6 +426,9 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         "active_pods_count": running_count,
         "gpu_hours_today": today_gpu_hours,
         "month_to_date": mtd_total,
+        "vs_last_month_pct": vs_last_month_pct,
+        "projected_month_end": projected_month_end,
+        "possible_idle_pods": possible_idle_pods,
         "daily_series": daily_series,
         "pods": pods_out,
         "gpu_breakdown": gpu_breakdown,

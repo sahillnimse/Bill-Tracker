@@ -416,12 +416,40 @@ def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> d
     days_left_in_month = 30 - datetime.now(timezone.utc).day
     projected_month_end = round(mtd_total + (today_total * max(days_left_in_month, 0)), 2)
 
+    # Calculate biggest mover over the last 7 days across all providers
+    movers = []
+    for key, pdata in data.items():
+        series = pdata.get("daily_series") or pdata.get("license_trend")
+        if not series or len(series) < 7:
+            continue
+        
+        val_key = "value" if "daily_series" in pdata else "monthly_bill"
+        today_val = series[-1].get(val_key, 0.0)
+        prev_val = series[-7].get(val_key, 0.0)
+        
+        if prev_val and prev_val > 0:
+            pct_change = round(((today_val - prev_val) / prev_val) * 100, 1)
+            movers.append({
+                "provider": key,
+                "pct_change": pct_change,
+                "abs_change": abs(pct_change)
+            })
+            
+    biggest_mover = None
+    if movers:
+        movers.sort(key=lambda x: x["abs_change"], reverse=True)
+        biggest_mover = {
+            "provider": movers[0]["provider"],
+            "pct_change": movers[0]["pct_change"]
+        }
+
     return {
         "providers": data,
         "today_total": round(today_total, 2),
         "month_to_date_total": round(mtd_total, 2),
         "projected_month_end": projected_month_end,
         "active_anomalies": anomalies,
+        "biggest_mover": biggest_mover,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

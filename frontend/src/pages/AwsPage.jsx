@@ -37,6 +37,10 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
   const savingsPlans = data.commitment_utilization?.savings_plans;
   const reservations = data.commitment_utilization?.reservations;
 
+  const mtdDeltaPct = data.vs_last_month_pct;
+  const mtdDelta = mtdDeltaPct != null ? `${mtdDeltaPct > 0 ? "+" : ""}${mtdDeltaPct}% vs last month` : monthToDateLabel();
+  const mtdDeltaClass = mtdDeltaPct != null ? (mtdDeltaPct > 0 ? "d-up" : mtdDeltaPct < 0 ? "d-dn" : "d-flat") : "d-flat";
+
   return (
     <div className="page" id="page-aws">
       <div className="ph">
@@ -80,7 +84,7 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
         <KpiCard accent="aws" label="Today" value={fmt(data.today)} valueColor="var(--aws)"
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null} deltaClass={deltaClass} />
         <KpiCard accent="aws" label="Yesterday" value={fmt(data.yesterday)} />
-        <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
+        <KpiCard accent="aws" label="Month to date" value={fmt(data.month_to_date)} delta={mtdDelta} deltaClass={mtdDeltaClass} />
         <KpiCard accent="aws" label="Forecast month-end" value={fmt(data.forecast_month_end?.amount || 0)}
           delta={data.forecast_month_end?.note || "Cost Forecast API"} deltaClass="d-flat" />
         <KpiCard accent="aws" label={`${days}-day avg/day`} value={fmt(data.avg_per_day_30d)} />
@@ -177,6 +181,23 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
                 : "No Savings Plans or Reserved Instances purchased — 100% on-demand pricing."}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-hdr"><div className="panel-title">Waste & Inefficiency</div></div>
+        {!data.low_utilization_spend?.length && <div className="empty-state">No low-utilization service spend detected.</div>}
+        <div className="svc-list">
+          {data.low_utilization_spend?.map((svc) => (
+            <div className="svc-row" key={svc.name}>
+              <span className="svc-name" title={svc.name}>{svc.name}</span>
+              <div className="svc-track">
+                <div className="svc-fill" style={{ width: "100%", background: "var(--danger)" }} />
+              </div>
+              <span className="svc-pct">usage quantity: {svc.usage}</span>
+              <span className="svc-amt">{fmt(svc.cost)}</span>
+            </div>
+          ))}
         </div>
       </div>
 

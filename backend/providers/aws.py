@@ -213,6 +213,32 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     mtd_days = [d for d in sorted_days if d.startswith(today.strftime("%Y-%m"))]
     mtd_total = round(sum(sum(daily[d].values()) for d in mtd_days), 2)
 
+    # Calculate last month same period
+    import calendar
+    if today.month == 1:
+        last_year = today.year - 1
+        last_month = 12
+    else:
+        last_year = today.year
+        last_month = today.month - 1
+    
+    _, last_month_days = calendar.monthrange(last_year, last_month)
+    last_day = min(today.day, last_month_days)
+    
+    last_month_start = date(last_year, last_month, 1)
+    last_month_end = date(last_year, last_month, last_day)
+
+    try:
+        last_daily = _daily_cost_by_service(last_month_start, last_month_end + timedelta(days=1))
+        last_month_same_period = sum(sum(services.values()) for services in last_daily.values())
+    except Exception as exc:
+        logger.warning("Failed to fetch prior month same period cost for AWS: %s", exc)
+        last_month_same_period = 0.0
+
+    vs_last_month_pct = None
+    if last_month_same_period and last_month_same_period > 0:
+        vs_last_month_pct = round(((mtd_total - last_month_same_period) / last_month_same_period) * 100, 1)
+
     # Service breakdown for the current month
     month_start = today.replace(day=1)
     query_end = today + timedelta(days=1)
@@ -222,6 +248,32 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
             service_totals[svc] = service_totals.get(svc, 0.0) + amt
     top_services = sorted(service_totals.items(), key=lambda kv: kv[1], reverse=True)[:6]
     total_svc = sum(service_totals.values()) or 1.0
+
+    # Low-utilization waste detection
+    low_utilization_spend = []
+    try:
+        ce = _client()
+        resp = ce.get_cost_and_usage(
+            TimePeriod={"Start": month_start.isoformat(), "End": query_end.isoformat()},
+            Granularity="MONTHLY",
+            Metrics=["UnblendedCost", "UsageQuantity"],
+            GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+        )
+        for period in resp.get("ResultsByTime", []):
+            for group in period.get("Groups", []):
+                service = group["Keys"][0]
+                cost = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                usage = float(group["Metrics"]["UsageQuantity"]["Amount"])
+                is_ignored = any(x in service.lower() for x in ["tax", "support", "credit", "subscription"])
+                if cost > 5.0 and usage < 0.05 and not is_ignored:
+                    low_utilization_spend.append({
+                        "name": service,
+                        "cost": round(cost, 2),
+                        "usage": round(usage, 4)
+                    })
+        low_utilization_spend.sort(key=lambda x: x["cost"], reverse=True)
+    except Exception as exc:
+        logger.warning("Failed to fetch low-utilization AWS spend: %s", exc)
 
     avg_per_day = round(sum(daily_totals) / len(daily_totals), 2) if daily_totals else 0.0
 
@@ -263,6 +315,8 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         "today": today_total,
         "yesterday": yesterday_total,
         "month_to_date": mtd_total,
+        "vs_last_month_pct": vs_last_month_pct,
+        "low_utilization_spend": low_utilization_spend,
         "avg_per_day_30d": avg_per_day,
         "daily_series": daily_series,
         "services": [

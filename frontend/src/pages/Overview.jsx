@@ -117,7 +117,7 @@ export default function Overview({ overview, loading, error }) {
   if (error) return <div className="error-state">Couldn't load overview: {error}</div>;
   if (!overview) return null;
 
-  const { providers, today_total, month_to_date_total, projected_month_end, active_anomalies } = overview;
+  const { providers, today_total, month_to_date_total, projected_month_end, active_anomalies, biggest_mover } = overview;
   const aws   = providers.aws        || {};
   const runpod = providers.runpod    || {};
   const gads  = providers.google_ads || {};
@@ -238,6 +238,30 @@ export default function Overview({ overview, loading, error }) {
             onClick={() => navigate(`/${topAnomaly.provider === "google_ads" ? "google-ads" : topAnomaly.provider}`)}
           >
             Investigate →
+          </button>
+        </div>
+      )}
+
+      {/* ── BIGGEST MOVER STRIP ── */}
+      {biggest_mover && (
+        <div className="anomaly-strip2" style={{ background: "rgba(6, 182, 212, 0.05)", border: "1px solid rgba(6, 182, 212, 0.15)", color: "var(--t1)", marginTop: 12 }}>
+          <div className="anomaly-strip2-icon" style={{ background: "var(--cyan)", color: "#fff" }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 11l4-4 3 3 5-7M13 3h-4M13 3v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div className="anomaly-strip2-body" style={{ color: "var(--t2)" }}>
+            <span className="anomaly-strip2-title" style={{ color: "var(--cyan)", fontWeight: 700 }}>
+              {providerLabel(biggest_mover.provider)}
+            </span>{" "}
+            spend {biggest_mover.pct_change > 0 ? "up" : "down"} {Math.abs(biggest_mover.pct_change)}% this week — biggest mover.
+          </div>
+          <button
+            className="anomaly-strip2-cta"
+            style={{ color: "var(--cyan)", borderLeft: "1px solid rgba(6, 182, 212, 0.15)" }}
+            onClick={() => navigate(biggest_mover.provider === "google_ads" ? "/google-ads" : `/${biggest_mover.provider}`)}
+          >
+            Details →
           </button>
         </div>
       )}

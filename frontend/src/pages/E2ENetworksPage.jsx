@@ -46,6 +46,10 @@ export default function E2ENetworksPage({ days = 30, syncVersion = 0 }) {
   const liveCostPerHr = runningNodes.reduce((sum, n) => sum + (n.cost_per_hr || 0), 0);
   const periodTotal = (data.daily_series || []).reduce((sum, d) => sum + (d.value || 0), 0);
 
+  const mtdDeltaPct = data.vs_last_month_pct;
+  const mtdDelta = mtdDeltaPct != null ? `${mtdDeltaPct > 0 ? "+" : ""}${mtdDeltaPct}% vs last month` : monthToDateLabel();
+  const mtdDeltaClass = mtdDeltaPct != null ? (mtdDeltaPct > 0 ? "d-up" : mtdDeltaPct < 0 ? "d-dn" : "d-flat") : "d-flat";
+
   return (
     <div className="page" id="page-e2e">
       {isAnomaly && (
@@ -101,7 +105,9 @@ export default function E2ENetworksPage({ days = 30, syncVersion = 0 }) {
           valueColor={isAnomaly ? "var(--danger)" : undefined}
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
-        <KpiCard accent="cyan" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
+        <KpiCard accent="cyan" label="Month to date" value={fmt(data.month_to_date)} delta={mtdDelta} deltaClass={mtdDeltaClass} />
+        <KpiCard accent="cyan" label="Projected month-end" value={fmt(data.projected_month_end || 0)}
+          delta="Simple run-rate projection" deltaClass="d-flat" />
         <KpiCard accent="cyan" label={`Total - ${days}d`} value={fmt(periodTotal)}
           delta={`across ${data.daily_series?.length || days} days`}
           deltaClass="d-flat" />
@@ -235,6 +241,26 @@ export default function E2ENetworksPage({ days = 30, syncVersion = 0 }) {
       <div className="panel">
         <div className="panel-hdr"><div className="panel-title">SKU / Node Type cost breakdown</div></div>
         <BreakdownPanel provider="e2e" items={data.node_breakdown} formatter={fmt} />
+      </div>
+
+      <div className="panel">
+        <div className="panel-hdr"><div className="panel-title">Waste & Inefficiency</div></div>
+        {!data.possible_idle_nodes?.length && <div className="empty-state">No long-running/idle compute nodes detected.</div>}
+        <div className="svc-list">
+          {data.possible_idle_nodes?.map((node) => {
+            const daysRunning = Math.round(node.uptime_seconds / 86400);
+            return (
+              <div className="svc-row" key={node.id}>
+                <span className="svc-name" title={node.name}>{node.name} ({node.gpu})</span>
+                <div className="svc-track">
+                  <div className="svc-fill" style={{ width: "100%", background: "var(--danger)" }} />
+                </div>
+                <span className="svc-pct">{daysRunning} days running</span>
+                <span className="svc-amt">{fmt(node.cost_per_hr)}/hr</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {history && history.length > 0 && (

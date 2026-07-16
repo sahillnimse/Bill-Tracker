@@ -36,6 +36,10 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
     ? [...data.campaigns].sort((a, b) => b.roas - a.roas)[0]
     : null;
 
+  const mtdDeltaPct = data.vs_last_month_pct;
+  const mtdDelta = mtdDeltaPct != null ? `${mtdDeltaPct > 0 ? "+" : ""}${mtdDeltaPct}% vs last month` : monthToDateLabel();
+  const mtdDeltaClass = mtdDeltaPct != null ? (mtdDeltaPct > 0 ? "d-up" : mtdDeltaPct < 0 ? "d-dn" : "d-flat") : "d-flat";
+
   return (
     <div className="page" id="page-gads">
       <div className="ph">
@@ -76,7 +80,9 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
         <KpiCard accent="gads" label="Today spend" value={fmt(data.today)} valueColor="var(--gads)"
           delta={isAnomaly ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
-        <KpiCard accent="gads" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
+        <KpiCard accent="gads" label="Month to date" value={fmt(data.month_to_date)} delta={mtdDelta} deltaClass={mtdDeltaClass} />
+        <KpiCard accent="gads" label="Projected month-end" value={fmt(data.projected_month_end || 0)}
+          delta="Simple run-rate projection" deltaClass="d-flat" />
         <KpiCard accent="gads" label={`Conversions (${days}d)`} value={data.total_conversions_period ?? 0} />
         <KpiCard accent="gads" label={`ROAS (${days}d)`} value={data.roas != null ? `${data.roas}x` : "—"} valueColor="var(--ok)" />
         <KpiCard accent="gads" label={`Avg CPC (${days}d)`} value={fmt(data.avg_cpc || 0)}

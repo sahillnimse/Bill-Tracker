@@ -56,6 +56,10 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
   const podSharePct = Math.round((podSpendTotal / podVsServerlessDenom) * 100);
   const serverlessSharePct = Math.round((serverlessSpendTotal / podVsServerlessDenom) * 100);
 
+  const mtdDeltaPct = data.vs_last_month_pct;
+  const mtdDelta = mtdDeltaPct != null ? `${mtdDeltaPct > 0 ? "+" : ""}${mtdDeltaPct}% vs last month` : monthToDateLabel();
+  const mtdDeltaClass = mtdDeltaPct != null ? (mtdDeltaPct > 0 ? "d-up" : mtdDeltaPct < 0 ? "d-dn" : "d-flat") : "d-flat";
+
   return (
     <div className="page" id="page-runpod">
       {isAnomaly && (
@@ -111,7 +115,9 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
           valueColor={isAnomaly ? "var(--danger)" : undefined}
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
           deltaClass={isAnomaly ? "d-up" : "d-flat"} />
-        <KpiCard accent="runpod" label="Month to date" value={fmt(data.month_to_date)} delta={monthToDateLabel()} deltaClass="d-flat" />
+        <KpiCard accent="runpod" label="Month to date" value={fmt(data.month_to_date)} delta={mtdDelta} deltaClass={mtdDeltaClass} />
+        <KpiCard accent="runpod" label="Projected month-end" value={fmt(data.projected_month_end || 0)}
+          delta="Simple run-rate projection" deltaClass="d-flat" />
         <KpiCard accent="runpod" label={`Total - ${days}d`} value={fmt(periodTotal)}
           delta={`across ${data.daily_series?.length || days} days`}
           deltaClass="d-flat" />
@@ -299,6 +305,26 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
           <div className="capacity-track">
             <div className="capacity-fill secure" style={{ width: `${serverlessSharePct}%` }} />
           </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-hdr"><div className="panel-title">Waste & Inefficiency</div></div>
+        {!data.possible_idle_pods?.length && <div className="empty-state">No long-running/idle GPU pods detected.</div>}
+        <div className="svc-list">
+          {data.possible_idle_pods?.map((pod) => {
+            const daysRunning = Math.round(pod.uptime_seconds / 86400);
+            return (
+              <div className="svc-row" key={pod.id}>
+                <span className="svc-name" title={pod.name}>{pod.name} ({pod.gpu})</span>
+                <div className="svc-track">
+                  <div className="svc-fill" style={{ width: "100%", background: "var(--danger)" }} />
+                </div>
+                <span className="svc-pct">{daysRunning} days running</span>
+                <span className="svc-amt">{fmt(pod.cost_per_hr)}/hr</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 

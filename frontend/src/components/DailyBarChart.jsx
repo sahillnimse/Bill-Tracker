@@ -21,9 +21,10 @@ import { useCurrency } from "../context/CurrencyContext";
  * Zero-value days are styled distinctly (dim, flat, muted color) so a
  * long stretch of no activity reads clearly as "no spend."
  */
-export default function DailyBarChart({ series = [], color = "#818cf8", highlightLast = false, tierThresholdPct = 15 }) {
+export default function DailyBarChart({ series = [], color = "#818cf8", highlightLast = false, tierThresholdPct = 15, formatter }) {
   const [hovered, setHovered] = useState(null);
-  const { fmt } = useCurrency();
+  const { fmt: defaultFmt } = useCurrency();
+  const fmt = formatter || defaultFmt;
 
   if (!series.length) {
     return <div className="empty-state">No data yet — click "Sync now" to fetch.</div>;

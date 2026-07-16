@@ -326,6 +326,44 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
             logger.warning("Google Ads campaign daily query for anomaly drivers unavailable: %s", exc)
             diagnostics["anomaly_drivers"] = "Campaign daily query unavailable"
 
+    # Calculate last month same period
+    import calendar
+    if today_tz.month == 1:
+        last_year = today_tz.year - 1
+        last_month = 12
+    else:
+        last_year = today_tz.year
+        last_month = today_tz.month - 1
+        
+    _, last_month_days = calendar.monthrange(last_year, last_month)
+    last_day = min(today_tz.day, last_month_days)
+    
+    last_month_start = date(last_year, last_month, 1)
+    last_month_end = date(last_year, last_month, last_day)
+
+    try:
+        last_month_start_str = last_month_start.strftime("%Y-%m-%d")
+        last_month_end_str = last_month_end.strftime("%Y-%m-%d")
+        last_month_query = f"""
+            SELECT metrics.cost_micros
+            FROM customer
+            WHERE segments.date BETWEEN '{last_month_start_str}' AND '{last_month_end_str}'
+        """
+        last_rows = _run_query(client, last_month_query)
+        last_month_same_period = sum((r.metrics.cost_micros / 1_000_000) / exchange_rate for r in last_rows)
+    except Exception as exc:
+        logger.warning("Failed to fetch prior month same period cost for Google Ads: %s", exc)
+        last_month_same_period = 0.0
+
+    vs_last_month_pct = None
+    if last_month_same_period and last_month_same_period > 0:
+        vs_last_month_pct = round(((mtd_spend - last_month_same_period) / last_month_same_period) * 100, 1)
+
+    # Projected month end
+    days_in_month = calendar.monthrange(today_tz.year, today_tz.month)[1]
+    days_elapsed = today_tz.day
+    projected_month_end = round((mtd_spend / days_elapsed) * days_in_month, 2) if days_elapsed > 0 else 0.0
+
     date_axis = [d["date"] for d in daily_series]
     if (anomaly.is_anomaly or anomaly_sma.is_anomaly) and campaign_daily:
         anomaly_drivers = compute_drivers(campaign_daily, date_axis, settings)
@@ -336,6 +374,8 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         "provider": "google_ads",
         "today": round(today_spend, 2),
         "month_to_date": mtd_spend,
+        "vs_last_month_pct": vs_last_month_pct,
+        "projected_month_end": projected_month_end,
         "roas": roas,
         "avg_cpc": overall_avg_cpc,
         "avg_cpm": overall_avg_cpm,

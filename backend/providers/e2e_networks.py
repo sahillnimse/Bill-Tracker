@@ -26,17 +26,25 @@ E2E_BILLING_PENDING = (
 
 
 def _rest_get(path: str, params: dict | None = None) -> Any:
-    if not e2e_config.api_key or "fake" in e2e_config.api_key.lower():
+    auth_token = e2e_config.auth_token or e2e_config.api_key
+    api_key = e2e_config.api_key
+
+    if (
+        not api_key
+        or "fake" in api_key.lower()
+        or not auth_token
+        or "fake" in auth_token.lower()
+    ):
         raise RuntimeError(E2E_BILLING_VERIFY_ERROR)
 
     headers = {
-        "Authorization": f"Bearer {e2e_config.api_key}",
+        "Authorization": f"Bearer {auth_token}",
         "Content-Type": "application/json",
     }
     
     # E2E requires project_id and location query parameters for scoping
     query_params = params or {}
-    query_params["apikey"] = e2e_config.api_key
+    query_params["apikey"] = api_key
     if e2e_config.project_id:
         query_params["project_id"] = e2e_config.project_id
     if e2e_config.location:
@@ -264,6 +272,19 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
             except ValueError:
                 pass
 
+        created_at = n.get("created_at") or n.get("createdAt")
+        uptime_sec = 0
+        if created_at:
+            try:
+                clean_dt = created_at.replace("Z", "+00:00").split(".")[0]
+                if " " in clean_dt and "+" not in clean_dt:
+                    created_dt = datetime.fromisoformat(clean_dt).replace(tzinfo=timezone.utc)
+                else:
+                    created_dt = datetime.fromisoformat(clean_dt)
+                uptime_sec = int((datetime.now(timezone.utc) - created_dt).total_seconds())
+            except Exception:
+                pass
+
         nodes_out.append({
             "id": n.get("id"),
             "name": name,
@@ -273,6 +294,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
             "plan": plan,
             "public_ip_address": n.get("public_ip_address"),
             "private_ip_address": n.get("private_ip_address"),
+            "uptime_seconds": uptime_sec,
         })
 
     # Anomaly checks
@@ -324,6 +346,63 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
             })
     historical_spikes.sort(key=lambda x: x["date"], reverse=True)
 
+    # Calculate last month same period
+    import calendar
+    if today_utc.month == 1:
+        last_year = today_utc.year - 1
+        last_month = 12
+    else:
+        last_year = today_utc.year
+        last_month = today_utc.month - 1
+        
+    _, last_month_days = calendar.monthrange(last_year, last_month)
+    last_day = min(today_utc.day, last_month_days)
+    
+    last_month_start = date(last_year, last_month, 1)
+    last_month_end = date(last_year, last_month, last_day)
+
+    try:
+        last_month_result = _rest_get(
+            "/billing/prepaid/monthly-estimate/",
+            params={"month": last_month, "year": last_year},
+        )
+        last_usage = []
+        if isinstance(last_month_result, dict) and "data" in last_month_result and "usage" in last_month_result["data"]:
+            last_usage = last_month_result["data"]["usage"]
+        
+        last_month_same_period = 0.0
+        for item in last_usage:
+            desc = item.get("description") or ""
+            amount = item.get("line_item_value") or 0.0
+            parsed_date = _parse_date_from_description(desc)
+            if parsed_date and parsed_date <= last_month_end.isoformat():
+                last_month_same_period += amount
+    except Exception as exc:
+        logger.warning("Failed to fetch prior month same period cost for E2E: %s", exc)
+        last_month_same_period = 0.0
+
+    vs_last_month_pct = None
+    if last_month_same_period and last_month_same_period > 0:
+        vs_last_month_pct = round(((mtd_total - last_month_same_period) / last_month_same_period) * 100, 1)
+
+    # Projected month end
+    days_in_month = calendar.monthrange(today_utc.year, today_utc.month)[1]
+    days_elapsed = today_utc.day
+    projected_month_end = round((mtd_total / days_elapsed) * days_in_month, 2) if days_elapsed > 0 else 0.0
+
+    # Possible idle nodes (running nodes with uptime > 7 days)
+    possible_idle_nodes = [
+        {
+            "id": node["id"],
+            "name": node["name"],
+            "uptime_seconds": node["uptime_seconds"],
+            "cost_per_hr": node["cost_per_hr"],
+            "gpu": node["gpu"]
+        }
+        for node in nodes_out
+        if node["status"] == "Running" and node["uptime_seconds"] > 7 * 86400
+    ]
+
     return {
         "provider": "e2e",
         "today": today_cost,
@@ -333,6 +412,9 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
         "gpu_hours_today": today_gpu_hours,
         "cpu_hours_today": today_cpu_hours,
         "month_to_date": mtd_total,
+        "vs_last_month_pct": vs_last_month_pct,
+        "projected_month_end": projected_month_end,
+        "possible_idle_nodes": possible_idle_nodes,
         "daily_series": daily_series,
         "nodes": nodes_out,
         "node_breakdown": node_breakdown,

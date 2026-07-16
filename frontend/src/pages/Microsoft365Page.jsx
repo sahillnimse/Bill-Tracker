@@ -4,6 +4,7 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import ExportButton from "../components/ExportButton";
+import DailyBarChart from "../components/DailyBarChart";
 
 function fmtINR(value) {
   if (value == null || value === "—") return "—";
@@ -171,32 +172,49 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
         </div>
       )}
 
-      {data.license_trend?.length > 0 && (
-        <div className="panel">
-          <div className="panel-hdr">
-            <div className="panel-title">License trend</div>
-            <div className="panel-stat">{data.license_trend.length} snapshots</div>
+      {(() => {
+        const chartSeries = data.license_trend?.map(row => ({ date: row.date, value: row.monthly_bill })) || [];
+        return (
+          <div className="two-col">
+            {chartSeries.length > 0 && (
+              <div className="panel panel--chart">
+                <div className="panel-hdr">
+                  <div className="panel-title">Monthly bill trend</div>
+                </div>
+                <DailyBarChart series={chartSeries} color="var(--ms)" formatter={fmt} />
+              </div>
+            )}
+            {data.license_trend?.length > 0 && (
+              <div className="panel">
+                <div className="panel-hdr">
+                  <div className="panel-title">License trend snapshots</div>
+                  <div className="panel-stat">{data.license_trend.length} snapshots</div>
+                </div>
+                <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                  <table className="etable">
+                    <thead>
+                      <tr>
+                        <th>Date</th><th>Total</th><th>Standard</th><th>Basic</th><th>Monthly bill</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.license_trend.map((row, i) => (
+                        <tr key={i}>
+                          <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{row.date}</td>
+                          <td>{row.total_licenses}</td>
+                          <td>{row.standard_count}</td>
+                          <td>{row.basic_count}</td>
+                          <td style={{ fontFamily: "var(--mono)" }}>{fmt(row.monthly_bill)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-          <table className="etable">
-            <thead>
-              <tr>
-                <th>Date</th><th>Total</th><th>Standard</th><th>Basic</th><th>Monthly bill</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.license_trend.map((row, i) => (
-                <tr key={i}>
-                  <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{row.date}</td>
-                  <td>{row.total_licenses}</td>
-                  <td>{row.standard_count}</td>
-                  <td>{row.basic_count}</td>
-                  <td style={{ fontFamily: "var(--mono)" }}>{fmt(row.monthly_bill)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        );
+      })()}
 
       <AnomalyHistory items={history} />
     </div>

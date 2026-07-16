@@ -45,6 +45,7 @@ class RunPodConfig:
 @dataclass(frozen=True)
 class E2EConfig:
     api_key: str = _get("E2E_API_KEY")
+    auth_token: str = _get("E2E_AUTH_TOKEN")
     project_id: int = _get_int("E2E_PROJECT_ID", 0)
     location: str = _get("E2E_LOCATION", "Delhi")
 
