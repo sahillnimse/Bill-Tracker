@@ -3,7 +3,6 @@ import AnomalyHistory from "../components/AnomalyHistory";
 import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
-import ExportButton from "../components/ExportButton";
 import DailyBarChart from "../components/DailyBarChart";
 
 function fmtINR(value) {
@@ -70,7 +69,6 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
           delta={data.sign_in_activity_available ? `${fmt(data.inactive_monthly_waste)}/mo wasted` : "sign-in data unavailable"}
           deltaClass={data.inactive_licensed_count > 0 ? "d-up" : "d-flat"} />
       </div>
-      <ExportButton data={data} filename="ms365_data.json" label="Export Details" />
 
       <div className="da-grid">
         <div className="da-card" data-accent="ms">

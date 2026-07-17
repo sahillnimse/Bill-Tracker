@@ -5,7 +5,6 @@ import AnomalyHistory from "../components/AnomalyHistory";
 import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
-import ExportButton from "../components/ExportButton";
 import MonthlySpendCard from "../components/MonthlySpendCard";
 import { monthToDateLabel } from "../utils/dateRangeLabel";
 
@@ -119,7 +118,6 @@ export default function E2ENetworksPage({ days = 30, syncVersion = 0 }) {
           delta={`${formatHours(data.free_tier_hours_used)} used this month (of 2.0h)`}
           deltaClass="d-flat" />
       </div>
-      <ExportButton data={data} filename="e2e_networks_data.json" label="Export Details" />
 
       <div className="da-grid">
         <MonthlySpendCard providerKey="e2e" accent="cyan" formatter={fmt} />

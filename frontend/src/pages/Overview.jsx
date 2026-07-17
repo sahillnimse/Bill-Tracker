@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import Sparkline from "../components/Sparkline";
 import AnomalyHistory from "../components/AnomalyHistory";
+import FullReportButton from "../components/FullReportButton";
 import { useCurrency } from "../context/CurrencyContext";
 
 function fmtINR(value) {
@@ -22,11 +23,11 @@ function pipClass(provider) {
 }
 
 const PROVIDER_META = {
-  aws:       { icon: "☁️", color: "var(--aws)",    bg: "rgba(255,159,67,0.08)",  label: "Amazon Web Services", route: "/aws" },
-  runpod:    { icon: "⚡", color: "var(--runpod)", bg: "rgba(199,107,255,0.08)", label: "RunPod",              route: "/runpod" },
-  google_ads:{ icon: "📣", color: "var(--gads)",   bg: "rgba(76,154,255,0.08)",  label: "Google Ads",         route: "/google-ads" },
-  ms365:     { icon: "🪟", color: "var(--ms)",     bg: "rgba(0,229,212,0.08)",   label: "Microsoft 365",      route: "/ms365" },
-  e2e:       { icon: "🚀", color: "var(--cyan)",   bg: "rgba(0,229,212,0.06)",   label: "E2E Networks",        route: "/e2e" },
+  aws: { icon: "☁️", color: "var(--aws)", bg: "rgba(255,159,67,0.08)", label: "Amazon Web Services", route: "/aws" },
+  runpod: { icon: "⚡", color: "var(--runpod)", bg: "rgba(199,107,255,0.08)", label: "RunPod", route: "/runpod" },
+  google_ads: { icon: "📣", color: "var(--gads)", bg: "rgba(76,154,255,0.08)", label: "Google Ads", route: "/google-ads" },
+  ms365: { icon: "🪟", color: "var(--ms)", bg: "rgba(0,229,212,0.08)", label: "Microsoft 365", route: "/ms365" },
+  e2e: { icon: "🚀", color: "var(--cyan)", bg: "rgba(0,229,212,0.06)", label: "E2E Networks", route: "/e2e" },
 };
 
 function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
@@ -36,18 +37,18 @@ function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
   const pip = pipClass(data);
 
   const today = name === "ms365" ? fmtINR(data?.monthly_bill) : name === "e2e" ? fmtINR(data?.today) : fmt(data?.today);
-  const mtd   = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : name === "e2e" ? fmtINR(data?.month_to_date) : fmt(data?.month_to_date);
+  const mtd = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : name === "e2e" ? fmtINR(data?.month_to_date) : fmt(data?.month_to_date);
 
   const thirdLabel = name === "aws" ? "vs avg" : name === "runpod" ? "vs avg" : name === "google_ads" ? "ROAS" : name === "e2e" ? "Active nodes" : "New IDs 7d";
-  const thirdVal   = name === "aws" || name === "runpod"
+  const thirdVal = name === "aws" || name === "runpod"
     ? (data?.anomaly?.pct_vs_baseline != null
-        ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}%`
-        : "—")
+      ? `${data.anomaly.pct_vs_baseline > 0 ? "+" : ""}${data.anomaly.pct_vs_baseline}%`
+      : "—")
     : name === "google_ads"
-    ? (data?.roas != null ? `${data.roas}×` : "—")
-    : name === "e2e"
-    ? String(data?.active_nodes_count ?? "—")
-    : `+${data?.new_ids_7d ?? 0}`;
+      ? (data?.roas != null ? `${data.roas}×` : "—")
+      : name === "e2e"
+        ? String(data?.active_nodes_count ?? "—")
+        : `+${data?.new_ids_7d ?? 0}`;
   const thirdColor = (name === "aws" || name === "runpod") && isAnomaly ? "var(--danger)" : name === "google_ads" ? "var(--ok)" : "var(--warn)";
 
   const sparkColor = { aws: "#f97316", runpod: "#e879f9", google_ads: "#3b82f6", ms365: "#00E5D4", e2e: "#22d3ee" }[name] || "#888";
@@ -74,7 +75,7 @@ function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
           </div>
         </div>
         <svg className="pc2-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
 
@@ -110,7 +111,7 @@ export default function Overview({ overview, loading, error }) {
     <div className="page" id="page-overview">
       <div className="skeleton-hero" />
       <div className="ov-grid" style={{ marginTop: 24 }}>
-        {[1,2,3,4].map(i => <div key={i} className="skeleton-card" />)}
+        {[1, 2, 3, 4].map(i => <div key={i} className="skeleton-card" />)}
       </div>
     </div>
   );
@@ -118,9 +119,9 @@ export default function Overview({ overview, loading, error }) {
   if (!overview) return null;
 
   const { providers, today_total, month_to_date_total, projected_month_end, active_anomalies, biggest_mover } = overview;
-  const aws   = providers.aws        || {};
-  const runpod = providers.runpod    || {};
-  const gads  = providers.google_ads || {};
+  const aws = providers.aws || {};
+  const runpod = providers.runpod || {};
+  const gads = providers.google_ads || {};
 
   const topAnomaly = active_anomalies?.[0];
   const providerCount = Object.keys(providers).length;
@@ -141,7 +142,7 @@ export default function Overview({ overview, loading, error }) {
   const deltaUp = deltaPct > 0;
 
   const formattedToday = fmt(today_total);
-  const tCcy    = formattedToday.match(/^\D+/)?.[0]?.trim() || "";
+  const tCcy = formattedToday.match(/^\D+/)?.[0]?.trim() || "";
   const tDigits = formattedToday.replace(/^\D+/, "");
   const [tWhole, tDecimal] = tDigits.split(".");
 
@@ -159,6 +160,9 @@ export default function Overview({ overview, loading, error }) {
           <div className="hero2-eyebrow">
             <span className="live-dot" />
             Live · {providerCount} providers
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <FullReportButton overview={overview} label="Export Full Report" />
           </div>
           <div className="hero2-figure-row">
             <div>
@@ -220,8 +224,8 @@ export default function Overview({ overview, loading, error }) {
         <div className="anomaly-strip2">
           <div className="anomaly-strip2-icon">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-              <path d="M7 5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <path d="M7 5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
           </div>
           <div className="anomaly-strip2-body">
@@ -286,8 +290,8 @@ export default function Overview({ overview, loading, error }) {
       {/* ── PROVIDERS GRID ── */}
       <div className="ov-section-label">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.5 }}>
-          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/>
-          <circle cx="6" cy="6" r="2" fill="currentColor"/>
+          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="6" cy="6" r="2" fill="currentColor" />
         </svg>
         Providers
       </div>

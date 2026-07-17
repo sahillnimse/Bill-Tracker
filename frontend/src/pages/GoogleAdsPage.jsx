@@ -5,7 +5,6 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
-import ExportButton from "../components/ExportButton";
 import MonthlySpendCard from "../components/MonthlySpendCard";
 import { monthToDateLabel } from "../utils/dateRangeLabel";
 
@@ -98,7 +97,6 @@ export default function GoogleAdsPage({ days = 30, syncVersion = 0 }) {
         <KpiCard accent="gads" label={`Avg CPC (${days}d)`} value={fmt(data.avg_cpc || 0)}
           delta={`CPM ${fmt(data.avg_cpm || 0)}`} deltaClass="d-flat" />
       </div>
-      <ExportButton data={data} filename="google_ads_data.json" label="Export Details" />
 
       <div className="da-grid">
         <MonthlySpendCard providerKey="google_ads" accent="google_ads" />

@@ -8,7 +8,6 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
-import ExportButton from "../components/ExportButton";
 import MonthlySpendCard from "../components/MonthlySpendCard";
 import { monthToDateLabel } from "../utils/dateRangeLabel";
 
@@ -99,7 +98,6 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
           delta={data.forecast_month_end?.note || "Cost Forecast API"} deltaClass="d-flat" />
         <KpiCard accent="aws" label={`${days}-day avg/day`} value={fmt(data.avg_per_day_30d)} />
       </div>
-      <ExportButton data={data} filename="aws_data.json" label="Export Details" />
 
       <div className="da-grid">
         <MonthlySpendCard providerKey="aws" accent="aws" />

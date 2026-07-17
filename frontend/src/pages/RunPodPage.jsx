@@ -7,7 +7,6 @@ import { useProvider } from "../hooks/useProviderData";
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
-import ExportButton from "../components/ExportButton";
 import MonthlySpendCard from "../components/MonthlySpendCard";
 import { monthToDateLabel } from "../utils/dateRangeLabel";
 
@@ -120,7 +119,7 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
         </div>
       )}
 
-<div className="kpi-grid">
+      <div className="kpi-grid">
         <KpiCard accent="runpod" label="Today" value={fmt(data.today)}
           valueColor={isAnomaly ? "var(--danger)" : undefined}
           delta={deltaPct != null ? `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs avg` : null}
@@ -139,7 +138,6 @@ export default function RunPodPage({ days = 30, syncVersion = 0 }) {
           delta={`${data.total_running_gpus || 0} active GPUs`}
           deltaClass="d-flat" />
       </div>
-      <ExportButton data={data} filename="runpod_data.json" label="Export Details" />
 
       <div className="da-grid">
         <MonthlySpendCard providerKey="runpod" accent="runpod" />
