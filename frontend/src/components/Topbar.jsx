@@ -10,10 +10,12 @@ const RANGES = [
 ];
 
 const PAGE_LABELS = {
+  "/": "Overview",
   "/aws": "Amazon Web Services",
   "/runpod": "RunPod",
   "/google-ads": "Google Ads",
   "/ms365": "Microsoft 365",
+  "/e2e": "E2E Networks",
   "/settings": "Settings",
 };
 
