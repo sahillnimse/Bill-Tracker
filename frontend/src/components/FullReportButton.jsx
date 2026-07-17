@@ -198,7 +198,7 @@ function buildAwsSection(doc, data, extras, y, margin, pageWidth, accent, fmt) {
         { label: "Yesterday", value: fmt(data.yesterday) },
         { label: "Month to date", value: fmt(data.month_to_date) },
         { label: "vs last month", value: data.vs_last_month_pct != null ? `${data.vs_last_month_pct > 0 ? "+" : ""}${data.vs_last_month_pct}%` : "—" },
-        { label: "Forecast month-end", value: fmt(data.forecast_month_end?.amount) },
+        { label: "Forecast month-end", value: data.forecast_month_end?.note ? "N/A" : fmt(data.forecast_month_end?.amount) },
         { label: "Avg/day (period)", value: fmt(data.avg_per_day_30d) },
         { label: "As of", value: data.as_of_date || "—" },
     ], y, margin, pageWidth, accent);
@@ -220,14 +220,20 @@ function buildAwsSection(doc, data, extras, y, margin, pageWidth, accent, fmt) {
 
     y = sectionHeading(doc, "Commitment Utilization", y, margin, pageWidth, accent);
     y = kpiStrip(doc, [
-        { label: "Savings Plans utilization", value: savingsPlans ? `${savingsPlans.utilization_pct}%` : "0% (none active)" },
+        { label: "Savings Plans utilization", value: savingsPlans ? `${savingsPlans.utilization_pct}%` : "Unavailable" },
         { label: "Savings Plans net savings", value: savingsPlans ? fmt(savingsPlans.net_savings) : "—" },
         { label: "On-demand equivalent cost", value: savingsPlans ? fmt(savingsPlans.on_demand_cost_equivalent) : "—" },
-        { label: "Reserved Instance utilization", value: reservations ? `${reservations.utilization_pct}%` : "0% (none active)" },
+        { label: "Reserved Instance utilization", value: reservations ? `${reservations.utilization_pct}%` : "Unavailable" },
         { label: "Unused reserved hours", value: reservations ? String(reservations.unused_hours) : "—" },
-        { label: "Coverage status", value: !savingsPlans && !reservations ? "Pay-as-you-go" : "Mixed" },
+        { label: "Coverage status", value: !savingsPlans && !reservations ? "Unable to verify (see note below)" : "Mixed" },
     ], y, margin, pageWidth, accent);
-    y = paragraph(doc, (data.commitment_utilization?.notes || []).join(" · "), y, margin, pageWidth, { fontSize: 8, color: GREY });
+    const commitmentNotes = [
+        ...(data.commitment_utilization?.notes || []),
+        data.forecast_month_end?.note || null,
+    ].filter(Boolean);
+    if (commitmentNotes.length) {
+        y = paragraph(doc, commitmentNotes.join(" · "), y, margin, pageWidth, { fontSize: 8, color: GREY });
+    }
 
     if (data.low_utilization_spend?.length) {
         y = sectionHeading(doc, "Waste & Inefficiency", y, margin, pageWidth, accent);

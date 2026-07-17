@@ -97,6 +97,15 @@ def _monthly_cost_by_dimension(start: date, end: date, dimension: str, limit: in
     ]
 
 
+def _reason_from_exc(exc: Exception, action: str) -> str:
+    """Turn a boto3 ClientError into a short human reason, distinguishing
+    a missing IAM permission from any other failure."""
+    msg = str(exc)
+    if "AccessDeniedException" in msg or "not authorized to perform" in msg:
+        return f"Missing IAM permission: {action}"
+    return "Forecast/utilization data unavailable"
+
+
 def _month_end_forecast(today: date) -> dict[str, Any]:
     first_next_month = (today.replace(day=28) + timedelta(days=4)).replace(day=1)
     if today >= first_next_month:
@@ -109,10 +118,13 @@ def _month_end_forecast(today: date) -> dict[str, Any]:
         PredictionIntervalLevel=80,
     )
     forecast_total = float(resp.get("Total", {}).get("Amount", 0.0))
-    return {
+    result = {
         "amount": round(forecast_total, 2),
         "unit": resp.get("Total", {}).get("Unit", "USD"),
     }
+    if forecast_total == 0.0:
+        result["note"] = "AWS returned $0 forecast (insufficient billing history)"
+    return result
 
 
 def _commitment_utilization(start: date, end: date) -> dict[str, Any]:
@@ -135,7 +147,7 @@ def _commitment_utilization(start: date, end: date) -> dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("Savings Plans utilization unavailable: %s", exc)
-        result["notes"].append("Savings Plans utilization unavailable")
+        result["notes"].append(_reason_from_exc(exc, "ce:GetSavingsPlansUtilization"))
 
     try:
         ri_resp = ce.get_reservation_utilization(
@@ -150,7 +162,7 @@ def _commitment_utilization(start: date, end: date) -> dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("Reservation utilization unavailable: %s", exc)
-        result["notes"].append("Reservation utilization unavailable")
+        result["notes"].append(_reason_from_exc(exc, "ce:GetReservationUtilization"))
 
     return result
 
@@ -302,7 +314,9 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         forecast = _month_end_forecast(today)
     except Exception as exc:
         logger.warning("AWS cost forecast unavailable: %s", exc)
-        diagnostics["forecast"] = "Forecast unavailable"
+        reason = _reason_from_exc(exc, "ce:GetCostForecast")
+        forecast = {"amount": 0.0, "note": reason}
+        diagnostics["forecast"] = reason
 
     try:
         commitment_utilization = _commitment_utilization(month_start, query_end)
