@@ -921,6 +921,19 @@
   animation: bPulse 2.5s ease-in-out infinite;
 }
 
+.a-banner--warn {
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--warn) 7%, transparent), color-mix(in srgb, var(--warn) 4%, transparent));
+}
+
+.a-banner--warn::before {
+  background: color-mix(in srgb, var(--warn) 6%, transparent);
+}
+
+.a-banner--warn .a-icon {
+  background: var(--warn);
+}
+
 .a-banner::before {
   content: '';
   position: absolute;

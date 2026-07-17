@@ -41,6 +41,10 @@ class AWSConfig:
 class RunPodConfig:
     api_key: str = _get("RUNPOD_API_KEY")
 
+@dataclass(frozen=True)
+class GeminiConfig:
+    api_key: str = _get("GEMINI_API_KEY")
+
 
 @dataclass(frozen=True)
 class E2EConfig:
@@ -124,3 +128,4 @@ ms365_config = Microsoft365Config()
 auth_config = AuthConfig()
 smtp_config = SMTPConfig()
 app_config = AppConfig()
+gemini_config = GeminiConfig()

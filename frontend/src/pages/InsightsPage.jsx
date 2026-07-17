@@ -11,7 +11,6 @@ const ROUTE_MAP = {
 };
 
 function severityClass(severity) {
-  if (severity === "danger") return "a-banner--danger";
   if (severity === "warn") return "a-banner--warn";
   return "";
 }
@@ -41,9 +40,7 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
 
   if (loading) return <div className="loading-state">Loading insights…</div>;
   if (error) return <div className="error-state">Couldn't load insights: {error}</div>;
-  if (!data) return null;
-
-  const { insights, generated_at } = data;
+  const { insights, generated_at, ai_summary } = data;
 
   return (
     <div className="page" id="page-insights">
@@ -51,6 +48,16 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
         <div className="ph-title">Insights</div>
         <div className="ph-sub">Everything unusual, explained — across every provider</div>
       </div>
+
+      {ai_summary && (
+        <div className="a-banner" style={{ marginTop: 24, borderColor: "var(--cyan)" }}>
+          <div className="a-icon" style={{ background: "var(--cyan)" }}>✨</div>
+          <div>
+            <div className="a-title">Today's Summary</div>
+            <div className="a-text">{ai_summary}</div>
+          </div>
+        </div>
+      )}
 
       {insights.length === 0 ? (
         <div className="empty-state" style={{ marginTop: 24, textAlign: "center", padding: "48px 24px" }}>

@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from llm_insights import generate_ai_summary
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import auth
-from config import auth_config
+from config import aws_config, runpod_config, e2e_config, app_config
 from cache import (
     add_allowed_user,
     cleanup_expired_revocations,
@@ -521,7 +522,24 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
             except Exception:
                 continue
     results.sort(key=lambda r: abs(r.get("delta") or 0), reverse=True)
-    return {"insights": results, "count": len(results), "generated_at": datetime.now(timezone.utc).isoformat()}
+
+    ai_summary = None
+    if results and gemini_config.api_key:
+        cache_key = f"insights_summary:{datetime.now(timezone.utc).date().isoformat()}"
+        cached = get_provider_cache(cache_key, max_age_seconds=3600)
+        if cached:
+            ai_summary = cached.get("summary")
+        else:
+            ai_summary = generate_ai_summary(results, gemini_config.api_key)
+            if ai_summary:
+                set_provider_cache(cache_key, {"summary": ai_summary})
+
+    return {
+        "insights": results,
+        "count": len(results),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "ai_summary": ai_summary,
+    }
 
 
 @app.get("/api/aws/instances")
