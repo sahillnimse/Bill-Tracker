@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import auth
-from config import aws_config, runpod_config, e2e_config, app_config
+from config import aws_config, runpod_config, e2e_config, app_config, auth_config, gemini_config
 from cache import (
     add_allowed_user,
     cleanup_expired_revocations,
@@ -35,7 +35,7 @@ from cache import (
     set_provider_cache,
     set_setting,
 )
-from config import app_config
+
 from providers import aws as aws_provider
 from providers import aws_resources
 from providers import google_ads as google_ads_provider

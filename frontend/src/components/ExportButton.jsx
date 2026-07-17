@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 const FILENAME_LABELS = {
   aws_data: "AWS",
@@ -88,7 +88,7 @@ export default function ExportButton({ data, filename, label = "Export Details" 
 
       const kpis = extractKPIs(data);
       if (kpis.length > 0) {
-        doc.autoTable({
+        autoTable(doc, {
           startY: y,
           head: [["Metric", "Value"]],
           body: kpis,

@@ -11,6 +11,7 @@ import E2ENetworksPage from "./pages/E2ENetworksPage";
 import InsightsPage from "./pages/InsightsPage";
 import SettingsPage from "./pages/SettingsPage";
 import { useOverview } from "./hooks/useProviderData";
+import api from "./api/client";
 import { CurrencyProvider } from "./context/CurrencyContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
@@ -18,8 +19,7 @@ import ProfileMenu from "./components/ProfileMenu";
 import AnomalyToast from "./components/AnomalyToast";
 import "./App.css";
 
-function badgesFromOverview(overview) {
-  if (!overview) return {};
+function badgesFromInsights(insights, overview) {
   const badges = {};
   const keyByProvider = {
     aws: "aws",
@@ -28,14 +28,14 @@ function badgesFromOverview(overview) {
     ms365: "ms",
     e2e: "e2e",
   };
-  const todayStr = new Date().toISOString().slice(0, 10);
 
-  for (const a of overview.active_anomalies || []) {
-    if (a.date !== todayStr) continue;
-    const key = keyByProvider[a.provider];
+  for (const item of insights || []) {
+    const key = keyByProvider[item.provider];
     if (!key) continue;
-    if (!badges[key]) badges[key] = { className: "b-danger", count: 0 };
+    const className = item.severity === "warn" ? "b-warn" : "b-danger";
+    if (!badges[key]) badges[key] = { className, count: 0 };
     badges[key].count += 1;
+    if (item.severity !== "warn") badges[key].className = "b-danger";
   }
 
   const result = {};
@@ -43,7 +43,7 @@ function badgesFromOverview(overview) {
     result[key] = { className, text: String(count) };
   }
 
-  const newIds = overview.providers?.ms365?.new_ids_7d;
+  const newIds = overview?.providers?.ms365?.new_ids_7d;
   if (!result.ms && newIds > 0) {
     result.ms = { className: "b-warn", text: `+${newIds}` };
   }
@@ -55,6 +55,7 @@ function AppShell() {
   const [days, setDays] = useState(30);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { data: overview, loading, syncing, error, syncAll, lastSyncedAt, syncVersion } = useOverview(days);
+  const [insightsData, setInsightsData] = useState(null);
   const location = useLocation();
 
   useEffect(() => {
@@ -62,11 +63,16 @@ function AppShell() {
     if (el) el.scrollTop = 0;
   }, [location.pathname]);
 
-  const todaysAnomalies = (overview?.active_anomalies || []).filter(
-    (a) => a.date === new Date().toISOString().slice(0, 10)
-  );
-  const anomalyCount = todaysAnomalies.length;
-  const providerBadges = badgesFromOverview(overview);
+  useEffect(() => {
+    let cancelled = false;
+    api.getInsights(days)
+      .then((res) => { if (!cancelled) setInsightsData(res); })
+      .catch(() => { if (!cancelled) setInsightsData(null); });
+    return () => { cancelled = true; };
+  }, [days, syncVersion]);
+
+  const anomalyCount = insightsData?.count ?? 0;
+  const providerBadges = badgesFromInsights(insightsData?.insights, overview);
 
   return (
     <div className={`shell${sidebarCollapsed ? " shell--sb-collapsed" : ""}`}>
