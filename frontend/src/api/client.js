@@ -24,6 +24,8 @@ const realApi = {
     client.post(`/sync/${key}`, null, { params: { days } }).then((r) => r.data),
   getAnomalies: (provider, limit = 20) =>
     client.get("/anomalies", { params: { provider, limit } }).then((r) => r.data),
+  getInsights: (days = 30) =>
+    client.get("/insights", { params: { days } }).then((r) => r.data),
   getSettings: () => client.get("/settings").then((r) => r.data),
   updateSettings: (payload) =>
     client.post("/settings", payload).then((r) => r.data),

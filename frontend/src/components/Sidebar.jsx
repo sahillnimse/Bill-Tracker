@@ -43,6 +43,20 @@ export default function Sidebar({ anomalyCount = 0, providerBadges = {}, collaps
         )}
       </NavLink>
 
+      <NavLink
+        to="/insights"
+        className={({ isActive }) => `si c-insights${isActive ? " on" : ""}`}
+        title={collapsed ? "Insights" : undefined}
+      >
+        <div className="si-bar"></div>
+        <span style={{ color: "var(--cyan)", fontSize: collapsed ? 16 : 12 }}>✨</span>
+        {!collapsed && <span>Insights</span>}
+        {!collapsed && anomalyCount > 0 && <span className="badge b-danger">{anomalyCount}</span>}
+        {collapsed && anomalyCount > 0 && (
+          <span className="badge b-danger sb-badge-dot">{anomalyCount}</span>
+        )}
+      </NavLink>
+
       {!collapsed && <div className="sb-sec">Providers</div>}
       {collapsed && <div className="sb-divider" />}
       {NAV_ITEMS.map((item) => (

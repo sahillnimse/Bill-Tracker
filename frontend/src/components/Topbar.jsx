@@ -16,6 +16,7 @@ const PAGE_LABELS = {
   "/google-ads": "Google Ads",
   "/ms365": "Microsoft 365",
   "/e2e": "E2E Networks",
+  "/insights": "Insights",
   "/settings": "Settings",
 };
 

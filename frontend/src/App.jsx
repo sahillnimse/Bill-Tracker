@@ -8,6 +8,7 @@ import RunPodPage from "./pages/RunPodPage";
 import GoogleAdsPage from "./pages/GoogleAdsPage";
 import Microsoft365Page from "./pages/Microsoft365Page";
 import E2ENetworksPage from "./pages/E2ENetworksPage";
+import InsightsPage from "./pages/InsightsPage";
 import SettingsPage from "./pages/SettingsPage";
 import { useOverview } from "./hooks/useProviderData";
 import { CurrencyProvider } from "./context/CurrencyContext";
@@ -92,6 +93,7 @@ function AppShell() {
             <Route path="/google-ads" element={<GoogleAdsPage days={days} syncVersion={syncVersion} />} />
             <Route path="/ms365" element={<Microsoft365Page days={days} syncVersion={syncVersion} />} />
             <Route path="/e2e" element={<E2ENetworksPage days={days} syncVersion={syncVersion} />} />
+            <Route path="/insights" element={<InsightsPage days={days} syncVersion={syncVersion} />} />
 
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

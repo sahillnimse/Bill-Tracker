@@ -39,6 +39,7 @@ from providers import aws as aws_provider
 from providers import aws_resources
 from providers import google_ads as google_ads_provider
 from providers import microsoft365 as ms365_provider
+from providers.microsoft365 import ms365_insights
 from providers import runpod as runpod_provider
 from providers import e2e_networks as e2e_provider
 # mock_fallback intentionally not imported — no fake data served to frontend
@@ -490,6 +491,37 @@ def sync_provider(provider_key: str, days: int = 30, session: dict = Depends(aut
 @app.get("/api/anomalies")
 def anomalies(provider: str | None = None, limit: int = 20, session: dict = Depends(auth.require_session)) -> list[dict[str, Any]]:
     return get_anomaly_history(provider, limit)
+
+
+@app.get("/api/insights")
+def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    results = []
+    for key in PROVIDERS:
+        try:
+            data = _get_provider_data(key, days=days)
+        except Exception:
+            continue
+        anomaly = data.get("anomaly")
+        if anomaly and anomaly.get("is_anomaly"):
+            results.append({
+                "provider": key,
+                "provider_label": ANOMALY_LABELS.get(key, key),
+                "today_value": anomaly.get("today_value"),
+                "baseline_mean": anomaly.get("baseline_mean"),
+                "pct_vs_baseline": anomaly.get("pct_vs_baseline"),
+                "delta": anomaly.get("delta"),
+                "severity": anomaly.get("severity"),
+                "explanation": data.get("anomaly_explanation", ""),
+                "drivers": data.get("anomaly_drivers", []),
+            })
+        if key == "ms365":
+            try:
+                ms_results = ms365_insights(data)
+                results.extend(ms_results)
+            except Exception:
+                continue
+    results.sort(key=lambda r: abs(r.get("delta") or 0), reverse=True)
+    return {"insights": results, "count": len(results), "generated_at": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/api/aws/instances")
