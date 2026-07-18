@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import "./LoginPage.css";
 
@@ -7,52 +7,81 @@ function getErrorMessage(message) {
     return message;
 }
 
+/* ---------------------------------------------------------------
+   Data used purely for the marketing panel's live ledger illusion.
+   Amounts are illustrative — the real numbers live behind login.
+---------------------------------------------------------------- */
+
 const PROVIDERS = [
-    { key: "aws", label: "AWS", color: "var(--aws)" },
-    { key: "runpod", label: "RunPod", color: "var(--runpod)" },
-    { key: "gads", label: "Google Ads", color: "var(--gads)" },
-    { key: "ms", label: "Microsoft 365", color: "var(--ms)" },
-    { key: "e2e", label: "E2E Networks", color: "var(--cyan)" },
+    { key: "aws", label: "AWS", color: "var(--aws)", share: 61 },
+    { key: "runpod", label: "RunPod", color: "var(--runpod)", share: 26 },
+    { key: "gads", label: "Google Ads", color: "var(--gads)", share: 13 },
+    { key: "ms", label: "Microsoft 365", color: "var(--ms)", share: 4 },
+    { key: "e2e", label: "E2E Networks", color: "var(--cyan)", share: 1 },
 ];
 
-const STATS = [
-    { value: 5, label: "providers tracked", color: "var(--t1)", isNumber: true },
-    { value: 1, label: "unified ledger", color: "var(--t1)", isNumber: true },
-    { value: "Live", label: "anomaly detection", color: "var(--ok)", isNumber: false },
+const LEDGER_ROWS = [
+    { p: "aws", label: "EC2 m6a.xlarge · ap-south-1", amt: 412.4 },
+    { p: "runpod", label: "Serverless e95th84 · A6000", amt: 236.1 },
+    { p: "gads", label: "LH_Search_Lawyers_Drafting", amt: 118.6 },
+    { p: "aws", label: "RDS db.t4g.medium", amt: 96.3 },
+    { p: "ms", label: "Business Basic ×14 seats", amt: 79.2 },
+    { p: "aws", label: "NAT Gateway hours", amt: 64.8 },
+    { p: "runpod", label: "Pod spot · RTX A5000", amt: 51.5 },
+    { p: "gads", label: "Search Partners network", amt: 42.9 },
+    { p: "e2e", label: "CPU node · Mumbai", amt: 18.7 },
+    { p: "aws", label: "CloudWatch metrics", amt: 12.2 },
+    { p: "ms", label: "Business Standard ×1", amt: 9.6 },
+    { p: "aws", label: "ELB usage", amt: 8.4 },
 ];
 
-const ACTIVITY_LINES = [
+const TICKER_LINES = [
     "AWS Cost Explorer synced",
     "RunPod billing polled",
     "Google Ads spend checked",
     "Microsoft 365 seats verified",
-    "E2E Networks billing updated",
+    "E2E Networks nodes scanned",
+    "Anomaly baselines recomputed",
 ];
 
-function useCountUp(target, isNumber, durationMs = 700) {
-    const [display, setDisplay] = useState(isNumber ? 0 : target);
+/* ------------------------- hooks ------------------------- */
 
+function usePrefersReducedMotion() {
+    const [reduced, setReduced] = useState(false);
     useEffect(() => {
-        if (!isNumber) {
+        const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        setReduced(mq.matches);
+        const fn = (e) => setReduced(e.matches);
+        mq.addEventListener("change", fn);
+        return () => mq.removeEventListener("change", fn);
+    }, []);
+    return reduced;
+}
+
+function useCountUp(target, durationMs = 1600, start = true) {
+    const [display, setDisplay] = useState(0);
+    const reduced = usePrefersReducedMotion();
+    useEffect(() => {
+        if (!start) return;
+        if (reduced) {
             setDisplay(target);
             return;
         }
         let raf;
-        const start = performance.now();
+        const t0 = performance.now();
         function tick(now) {
-            const progress = Math.min((now - start) / durationMs, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setDisplay(Math.round(eased * target));
+            const progress = Math.min((now - t0) / durationMs, 1);
+            const eased = 1 - Math.pow(1 - progress, 4);
+            setDisplay(target * eased);
             if (progress < 1) raf = requestAnimationFrame(tick);
         }
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-    }, [target, isNumber, durationMs]);
-
+    }, [target, durationMs, start, reduced]);
     return display;
 }
 
-function useRotatingIndex(length, intervalMs = 2600) {
+function useRotatingIndex(length, intervalMs = 2800) {
     const [index, setIndex] = useState(0);
     useEffect(() => {
         const id = setInterval(() => setIndex((i) => (i + 1) % length), intervalMs);
@@ -61,60 +90,55 @@ function useRotatingIndex(length, intervalMs = 2600) {
     return index;
 }
 
+/* --------------------- ambience layers --------------------- */
+
 function ParticleField() {
     const canvasRef = useRef(null);
+    const reduced = usePrefersReducedMotion();
 
     useEffect(() => {
+        if (reduced) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
-        let raf;
-        let particles = [];
-        let w = 0;
-        let h = 0;
+        let raf, particles = [], w = 0, h = 0;
 
         function resize() {
             w = canvas.parentElement.clientWidth;
             h = canvas.parentElement.clientHeight;
-            canvas.width = w * window.devicePixelRatio;
-            canvas.height = h * window.devicePixelRatio;
+            canvas.width = w * devicePixelRatio;
+            canvas.height = h * devicePixelRatio;
             canvas.style.width = `${w}px`;
             canvas.style.height = `${h}px`;
-            ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+            ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         }
 
         function init() {
-            const count = Math.max(18, Math.floor((w * h) / 24000));
+            const count = Math.max(20, Math.floor((w * h) / 26000));
             particles = Array.from({ length: count }, () => ({
                 x: Math.random() * w,
                 y: Math.random() * h,
-                vx: (Math.random() - 0.5) * 0.16,
-                vy: (Math.random() - 0.5) * 0.16,
-                r: Math.random() * 1.3 + 0.6,
+                vx: (Math.random() - 0.5) * 0.18,
+                vy: (Math.random() - 0.5) * 0.18,
+                r: Math.random() * 1.3 + 0.5,
             }));
         }
 
         function step() {
             ctx.clearRect(0, 0, w, h);
-            const linkDist = 120;
-
-            for (let i = 0; i < particles.length; i++) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
+            const linkDist = 130;
+            for (const p of particles) {
+                p.x += p.vx; p.y += p.vy;
                 if (p.x < 0 || p.x > w) p.vx *= -1;
                 if (p.y < 0 || p.y > h) p.vy *= -1;
             }
-
             for (let i = 0; i < particles.length; i++) {
                 for (let j = i + 1; j < particles.length; j++) {
-                    const a = particles[i];
-                    const b = particles[j];
-                    const dx = a.x - b.x;
-                    const dy = a.y - b.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const a = particles[i], b = particles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.hypot(dx, dy);
                     if (dist < linkDist) {
-                        ctx.strokeStyle = `rgba(255, 29, 88, ${0.13 * (1 - dist / linkDist)})`;
+                        ctx.strokeStyle = `rgba(0, 229, 212, ${0.12 * (1 - dist / linkDist)})`;
                         ctx.lineWidth = 0.6;
                         ctx.beginPath();
                         ctx.moveTo(a.x, a.y);
@@ -123,107 +147,261 @@ function ParticleField() {
                     }
                 }
             }
-
             for (const p of particles) {
-                ctx.fillStyle = "rgba(242, 243, 245, 0.32)";
+                ctx.fillStyle = "rgba(244, 246, 251, 0.30)";
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
                 ctx.fill();
             }
-
             raf = requestAnimationFrame(step);
         }
 
-        resize();
-        init();
-        step();
-
-        const onResize = () => {
-            resize();
-            init();
-        };
+        resize(); init(); step();
+        const onResize = () => { resize(); init(); };
         window.addEventListener("resize", onResize);
         return () => {
             cancelAnimationFrame(raf);
             window.removeEventListener("resize", onResize);
         };
-    }, []);
+    }, [reduced]);
 
-    return <canvas ref={canvasRef} className="login-particles" />;
+    return <canvas ref={canvasRef} className="lp-particles" aria-hidden="true" />;
 }
 
-function StatCard({ stat }) {
-    const value = useCountUp(stat.isNumber ? stat.value : 0, stat.isNumber);
+function AuroraBackdrop() {
     return (
-        <div className="login-stat">
-            <div className="login-stat-val" style={{ color: stat.color }}>
-                {stat.isNumber ? value : stat.value}
+        <div className="lp-aurora" aria-hidden="true">
+            <div className="lp-aurora-blob lp-aurora-a" />
+            <div className="lp-aurora-blob lp-aurora-b" />
+            <div className="lp-aurora-blob lp-aurora-c" />
+            <ParticleField />
+            <div className="lp-noise" />
+        </div>
+    );
+}
+
+/* Animated spend pulse drawn behind the headline. */
+function PulseLine() {
+    const canvasRef = useRef(null);
+    const reduced = usePrefersReducedMotion();
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        let raf;
+        let w = 0;
+        let h = 0;
+        let t = 0;
+
+        function resize() {
+            w = canvas.parentElement.clientWidth;
+            h = canvas.parentElement.clientHeight;
+            canvas.width = w * devicePixelRatio;
+            canvas.height = h * devicePixelRatio;
+            canvas.style.width = `${w}px`;
+            canvas.style.height = `${h}px`;
+            ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        }
+
+        function wave(x, phase, amp, freq) {
+            return (
+                Math.sin(x * freq + phase) * amp +
+                Math.sin(x * freq * 2.3 + phase * 1.6) * amp * 0.35
+            );
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, w, h);
+            const baseY = h * 0.62;
+            const grad = ctx.createLinearGradient(0, 0, w, 0);
+            grad.addColorStop(0, "rgba(0,229,212,0)");
+            grad.addColorStop(0.25, "rgba(0,229,212,0.55)");
+            grad.addColorStop(0.75, "rgba(180,255,57,0.5)");
+            grad.addColorStop(1, "rgba(180,255,57,0)");
+
+            ctx.beginPath();
+            for (let x = 0; x <= w; x += 3) {
+                const y = baseY + wave(x, t, 14, 0.012);
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+
+            // faint echo line
+            ctx.beginPath();
+            for (let x = 0; x <= w; x += 4) {
+                const y = baseY + 18 + wave(x, t * 0.7 + 2, 10, 0.010);
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = "rgba(142,151,175,0.14)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            t += 0.016;
+            raf = requestAnimationFrame(draw);
+        }
+
+        resize();
+        if (reduced) {
+            t = 3;
+            const once = () => {
+                draw();
+                cancelAnimationFrame(raf);
+            };
+            once();
+        } else {
+            draw();
+        }
+        const onResize = () => resize();
+        window.addEventListener("resize", onResize);
+        return () => {
+            cancelAnimationFrame(raf);
+            window.removeEventListener("resize", onResize);
+        };
+    }, [reduced]);
+
+    return <canvas ref={canvasRef} className="lp-pulse" aria-hidden="true" />;
+}
+
+/* ------------------ signature: live ledger ------------------ */
+
+function providerColor(key) {
+    const p = PROVIDERS.find((x) => x.key === key);
+    return p ? p.color : "var(--t3)";
+}
+
+function LedgerTape() {
+    // duplicate rows for a seamless loop
+    const rows = useMemo(() => [...LEDGER_ROWS, ...LEDGER_ROWS], []);
+    return (
+        <div className="lp-ledger" role="presentation">
+            <div className="lp-ledger-head">
+                <span className="lp-ledger-dot lp-ledger-dot--r" />
+                <span className="lp-ledger-dot lp-ledger-dot--y" />
+                <span className="lp-ledger-dot lp-ledger-dot--g" />
+                <span className="lp-ledger-title">xarka / spend.ledger</span>
+                <span className="lp-ledger-live">
+                    <span className="lp-live-pulse" />
+                    LIVE
+                </span>
             </div>
-            <div className="login-stat-label">{stat.label}</div>
+            <div className="lp-ledger-cols">
+                <span>provider</span>
+                <span>line item</span>
+                <span className="lp-num">amount / day</span>
+            </div>
+            <div className="lp-ledger-viewport">
+                <div className="lp-ledger-scroll">
+                    {rows.map((r, i) => (
+                        <div className="lp-ledger-row" key={i}>
+                            <span className="lp-ledger-rail" style={{ background: providerColor(r.p) }} />
+                            <span className="lp-ledger-provider" style={{ color: providerColor(r.p) }}>
+                                {PROVIDERS.find((x) => x.key === r.p)?.label}
+                            </span>
+                            <span className="lp-ledger-item">{r.label}</span>
+                            <span className="lp-ledger-amt lp-num">₹{r.amt.toFixed(1)}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className="lp-ledger-fade lp-ledger-fade--top" />
+                <div className="lp-ledger-fade lp-ledger-fade--bottom" />
+            </div>
+        </div>
+    );
+}
+
+function ProviderRail() {
+    return (
+        <div className="lp-rail">
+            {PROVIDERS.map((p, i) => (
+                <div className="lp-rail-item" key={p.key} style={{ animationDelay: `${0.5 + i * 0.08}s` }}>
+                    <div className="lp-rail-top">
+                        <span className="lp-rail-dot" style={{ background: p.color, boxShadow: `0 0 10px ${"currentColor"}` }} />
+                        <span className="lp-rail-label">{p.label}</span>
+                        <span className="lp-rail-share lp-num">{p.share}%</span>
+                    </div>
+                    <div className="lp-rail-bar">
+                        <div
+                            className="lp-rail-fill"
+                            style={{ width: `${p.share}%`, background: p.color, animationDelay: `${0.7 + i * 0.08}s` }}
+                        />
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
 
 function ActivityTicker() {
-    const index = useRotatingIndex(ACTIVITY_LINES.length);
+    const index = useRotatingIndex(TICKER_LINES.length);
     return (
-        <div className="login-ticker">
-            <span className="login-ticker-dot" />
-            <span className="login-ticker-text" key={index}>{ACTIVITY_LINES[index]}</span>
+        <div className="lp-ticker" aria-live="polite">
+            <span className="lp-ticker-pulse" />
+            <span className="lp-ticker-text" key={index}>
+                {TICKER_LINES[index]}
+            </span>
         </div>
     );
 }
+
+/* ---------------------- left panel ---------------------- */
 
 function MarketingPanel() {
+    const spend = useCountUp(92643, 1800);
     return (
-        <div className="login-panel login-panel--left">
-            <div className="login-panel-grid" />
-            <ParticleField />
-            <div className="login-glow login-glow-a" />
-
-            <div className="login-panel-content">
-                <div className="login-brand-row">
-                    <div className="login-mark login-mark--sm">
-                        <span className="login-mark-glyph">S</span>
+        <div className="lp-left">
+            <div className="lp-left-inner">
+                <div className="lp-brand-row lp-reveal" style={{ animationDelay: "0.05s" }}>
+                    <div className="lp-mark">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                            <path d="M3 16 8 9l4 4 5-8 4 6" stroke="#0A0D16" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
                     </div>
-                    <span className="login-brand-name login-brand-name--sm">SpendWatch</span>
+                    <div className="lp-brand-text">
+                        <span className="lp-brand-name">SpendWatch</span>
+                        <span className="lp-brand-sub">LEDGER · LIVE</span>
+                    </div>
                 </div>
 
-                <h1 className="login-headline">
-                    Every dollar you spend
-                    <br />
-                    on tools, in one ledger.
-                </h1>
-
-                <p className="login-tagline">
-                    AWS, RunPod, Google Ads, Microsoft 365, and E2E Networks -
-                    tracked live, cross-checked for anomalies, built for Xarka.
-                </p>
-
-                <div className="login-providers">
-                    {PROVIDERS.map((p, i) => (
-                        <div key={p.key} className="login-chip" style={{ animationDelay: `${0.3 + i * 0.07}s` }}>
-                            <span className="login-chip-dot" style={{ background: p.color, boxShadow: `0 0 0 3px ${p.color}22` }} />
-                            {p.label}
-                        </div>
-                    ))}
+                <div className="lp-hero">
+                    <PulseLine />
+                    <h1 className="lp-headline lp-reveal" style={{ animationDelay: "0.15s" }}>
+                        Every rupee your
+                        <br />
+                        cloud burns,
+                        <br />
+                        <span className="lp-headline-accent">accounted for.</span>
+                    </h1>
+                    <div className="lp-mtd lp-reveal" style={{ animationDelay: "0.3s" }}>
+                        <span className="lp-mtd-label">TRACKED THIS MONTH</span>
+                        <span className="lp-mtd-value lp-num">
+                            ₹{Math.round(spend).toLocaleString("en-IN")}
+                        </span>
+                        <span className="lp-mtd-sub">across 5 providers · anomalies flagged in minutes, not invoices</span>
+                    </div>
                 </div>
 
-                <div className="login-divider" />
-
-                <div className="login-stats">
-                    {STATS.map((s) => (
-                        <StatCard key={s.label} stat={s} />
-                    ))}
+                <div className="lp-panel-grid">
+                    <div className="lp-reveal" style={{ animationDelay: "0.45s" }}>
+                        <LedgerTape />
+                    </div>
+                    <div className="lp-side-col">
+                        <ProviderRail />
+                        <ActivityTicker />
+                    </div>
                 </div>
-
-                <ActivityTicker />
             </div>
 
-            <div className="login-corner-label login-corner-label--left">XARKA AI TECHNOLOGIES</div>
+            <div className="lp-corner lp-corner--left">XARKA AI TECHNOLOGIES</div>
         </div>
     );
 }
+
+/* ---------------------- right panel ---------------------- */
 
 function SignInPanel() {
     const { login, enrollStart, enrollConfirm } = useAuth();
@@ -267,39 +445,46 @@ function SignInPanel() {
             } else {
                 await login(email, code);
             }
-            // AuthProvider's refresh() (called inside login/enrollConfirm) will
-            // update `user`, and the app router will move away from LoginPage.
         } catch (err) {
             setErrorMessage(getErrorMessage(err?.response?.data?.detail) || "Incorrect code. Please try again.");
             setStage("code");
         }
     };
 
-    return (
-        <div className="login-panel login-panel--right">
-            <div className="login-panel-grid" />
-            <div className="login-glow login-glow-b" />
-            <div className="login-card">
-                <div className="login-card-border" />
+    const stepIndex = stage === "email" || (stage === "submitting" && !qrDataUrl && code === "") ? 0 : stage === "qr" ? 1 : 2;
 
-                <div className="login-mark">
-                    <span className="login-mark-glyph">S</span>
+    return (
+        <div className="lp-right">
+            <div className="lp-card lp-reveal" style={{ animationDelay: "0.2s" }}>
+                <div className="lp-card-sheen" aria-hidden="true" />
+
+                <div className="lp-card-mark">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+                        <path d="M3 16 8 9l4 4 5-8 4 6" stroke="#0A0D16" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                 </div>
 
-                <div className="login-brand">
-                    <span className="login-brand-name">Sign in to SpendWatch</span>
-                    <span className="login-brand-sub">
-                        {stage === "qr"
-                            ? "Scan this into Microsoft Authenticator to finish setup."
-                            : stage === "code"
-                                ? "Enter the 6-digit code from your authenticator app."
-                                : "Enter your authorized Xarka email to continue."}
-                    </span>
+                <h2 className="lp-card-title">Sign in to SpendWatch</h2>
+                <p className="lp-card-sub">
+                    {stage === "qr"
+                        ? "Scan this into Microsoft Authenticator to finish setup."
+                        : stepIndex === 2
+                            ? "Enter the 6-digit code from your authenticator app."
+                            : "Enter your authorized Xarka email to continue."}
+                </p>
+
+                <div className="lp-steps" aria-hidden="true">
+                    {["Email", "Verify", "Code"].map((label, i) => (
+                        <div key={label} className={`lp-step ${i <= stepIndex ? "is-active" : ""}`}>
+                            <span className="lp-step-bar" />
+                            <span className="lp-step-label">{label}</span>
+                        </div>
+                    ))}
                 </div>
 
                 {errorMessage && (
-                    <div className="login-error">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="login-error-icon">
+                    <div className="lp-error" role="alert">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                             <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3" />
                             <path d="M7 4v3.5M7 9.5h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
                         </svg>
@@ -307,67 +492,82 @@ function SignInPanel() {
                     </div>
                 )}
 
-                {stage === "email" || stage === "submitting" && !qrDataUrl && code === "" ? (
-                    <form onSubmit={handleEmailSubmit}>
-                        <input
-                            className="login-input"
-                            type="email"
-                            required
-                            placeholder="you@xarka.in"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            disabled={stage === "submitting"}
-                        />
-                        <button className="login-btn" type="submit" disabled={stage === "submitting"}>
+                {stage === "email" || (stage === "submitting" && !qrDataUrl && code === "") ? (
+                    <form onSubmit={handleEmailSubmit} className="lp-form" key="email">
+                        <label className="lp-field">
+                            <span className="lp-field-label">Work email</span>
+                            <input
+                                className="lp-input"
+                                type="email"
+                                required
+                                placeholder="you@xarka.in"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={stage === "submitting"}
+                                autoFocus
+                            />
+                        </label>
+                        <button className="lp-btn" type="submit" disabled={stage === "submitting"}>
                             <span>{stage === "submitting" ? "Checking…" : "Continue"}</span>
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M3 8h9M9 4.5 12.5 8 9 11.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                         </button>
                     </form>
                 ) : null}
 
                 {stage === "qr" && (
-                    <div className="login-qr-block">
-                        <img src={qrDataUrl} alt="Scan with Microsoft Authenticator" className="login-qr-img" />
-                        <button className="login-btn" onClick={handleQrContinue}>
+                    <div className="lp-qr" key="qr">
+                        <div className="lp-qr-frame">
+                            <img src={qrDataUrl} alt="Scan with Microsoft Authenticator" className="lp-qr-img" />
+                        </div>
+                        <button className="lp-btn" onClick={handleQrContinue}>
                             <span>I've scanned it — continue</span>
                         </button>
                     </div>
                 )}
 
                 {(stage === "code" || (stage === "submitting" && (qrDataUrl || code !== ""))) && (
-                    <form onSubmit={handleCodeSubmit}>
-                        <input
-                            className="login-input"
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]{6}"
-                            maxLength={6}
-                            required
-                            placeholder="6-digit code"
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            disabled={stage === "submitting"}
-                            autoFocus
-                        />
-                        <button className="login-btn" type="submit" disabled={stage === "submitting"}>
+                    <form onSubmit={handleCodeSubmit} className="lp-form" key="code">
+                        <label className="lp-field">
+                            <span className="lp-field-label">Authenticator code</span>
+                            <input
+                                className="lp-input lp-input--code lp-num"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]{6}"
+                                maxLength={6}
+                                required
+                                placeholder="••••••"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                disabled={stage === "submitting"}
+                                autoFocus
+                            />
+                        </label>
+                        <button className="lp-btn" type="submit" disabled={stage === "submitting"}>
                             <span>{stage === "submitting" ? "Verifying…" : "Sign in"}</span>
                         </button>
                     </form>
                 )}
 
-                <div className="login-footnote">
-                    <span className="login-dot" />
-                    Restricted to Xarka's authorized user list
+                <div className="lp-footnote">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                        <path d="M6 1 10 3v3c0 2.6-1.7 4.3-4 5-2.3-.7-4-2.4-4-5V3l4-2Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+                    </svg>
+                    Restricted to Xarka's authorized user list · MFA enforced
                 </div>
             </div>
 
-            <div className="login-corner-label login-corner-label--right">SPENDWATCH . INTERNAL</div>
+            <div className="lp-corner lp-corner--right">SPENDWATCH · INTERNAL</div>
         </div>
     );
 }
 
 export default function LoginPage() {
     return (
-        <div className="login-screen login-screen--split">
+        <div className="lp-screen">
+            <AuroraBackdrop />
             <MarketingPanel />
             <SignInPanel />
         </div>

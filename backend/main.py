@@ -43,10 +43,17 @@ from providers import microsoft365 as ms365_provider
 from providers.microsoft365 import ms365_insights
 from providers import runpod as runpod_provider
 from providers import e2e_networks as e2e_provider
+from providers import extras as extras_provider
 # mock_fallback intentionally not imported — no fake data served to frontend
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # httpx INFO logs leak API keys in URLs
 logger = logging.getLogger("spendwatch.main")
+
+# Negative cache: remember recent provider failures so a dead provider
+# isn't re-hit (and its traceback re-logged) on every /api/overview call.
+_FAILURE_TTL_SECONDS = 120
+_recent_failures: dict[str, dict[str, Any]] = {}  # key -> {"at": dt, "error": str, "logged": bool}
 logger.info(
     "AUTH CONFIG CHECK — cross_origin=%s frontend_url=%s",
     auth_config.cross_origin, auth_config.frontend_url,
@@ -295,6 +302,16 @@ def _get_empty_provider_data(provider_key: str, error_msg: str) -> dict[str, Any
 
 
 def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
+    # Skip providers that failed very recently instead of re-hitting a dead API.
+    failure = _recent_failures.get(provider_key)
+    if failure and (datetime.now(timezone.utc) - failure["at"]).total_seconds() < _FAILURE_TTL_SECONDS:
+        cached = get_provider_cache(provider_key, days=days)
+        if cached:
+            cached["_status"] = "stale"
+            cached["_error"] = failure["error"]
+            return cached
+        return _get_empty_provider_data(provider_key, failure["error"])
+
     try:
         if provider_key == "aws":
             data = aws_provider.fetch_aws_data(days=days)
@@ -307,7 +324,14 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
         else:
             data = PROVIDERS[provider_key]()
     except Exception as exc:
-        logger.exception("Failed to fetch %s", provider_key)
+        entry = _recent_failures.get(provider_key)
+        if entry is None or not entry.get("logged"):
+            logger.exception("Failed to fetch %s", provider_key)
+        else:
+            logger.warning("Provider %s still failing (cached failure): %s", provider_key, exc)
+        _recent_failures[provider_key] = {
+            "at": datetime.now(timezone.utc), "error": str(exc), "logged": True,
+        }
         cached = get_provider_cache(provider_key, days=days)
         if cached:
             cached["_status"] = "stale"
@@ -316,6 +340,7 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
         # No cache and no real data — return error schema instead of 502
         return _get_empty_provider_data(provider_key, str(exc))
 
+    _recent_failures.pop(provider_key, None)
     set_provider_cache(provider_key, data, days=days)
 
     label = ANOMALY_LABELS.get(provider_key, provider_key)
@@ -568,6 +593,85 @@ def aws_usage_breakdown(days: int = 30, session: dict = Depends(auth.require_ses
     except Exception as exc:
         logger.exception("Failed to fetch AWS usage breakdown")
         raise HTTPException(502, str(exc))
+
+
+# ---------------- extras: deep extraction endpoints ----------------
+
+_extras_cache: dict[str, tuple[datetime, Any]] = {}
+
+def _cached_extras(key: str, fn, ttl: int = 900):
+    now = datetime.now(timezone.utc)
+    hit = _extras_cache.get(key)
+    if hit and (now - hit[0]).total_seconds() < ttl:
+        return hit[1]
+    data = fn()
+    _extras_cache[key] = (now, data)
+    return data
+
+def _extras_endpoint(fn, cache_key: str | None = None, ttl: int = 900):
+    try:
+        if cache_key:
+            return _cached_extras(cache_key, fn, ttl)
+        return fn()
+    except Exception as exc:
+        logger.exception("Extras endpoint failed")
+        raise HTTPException(502, str(exc))
+
+@app.get("/api/aws/waste-scan")
+def aws_waste_scan(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_aws_waste_scan, "aws_waste", 3600)
+
+@app.get("/api/aws/cost-by-tag")
+def aws_cost_by_tag(tag_key: str = "Project", days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(lambda: extras_provider.fetch_aws_cost_by_tag(tag_key, days))
+
+@app.get("/api/aws/record-types")
+def aws_record_types(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(lambda: extras_provider.fetch_aws_record_types(days))
+
+@app.get("/api/aws/sp-recommendation")
+def aws_sp_recommendation(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_aws_sp_recommendation, "aws_sp_rec", 3600)
+
+@app.get("/api/runpod/utilization")
+def runpod_utilization(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_runpod_utilization)
+
+@app.get("/api/runpod/cost-components")
+def runpod_cost_components(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(lambda: extras_provider.fetch_runpod_cost_components(days))
+
+@app.get("/api/gads/search-terms")
+def gads_search_terms(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_gads_search_terms, "gads_terms")
+
+@app.get("/api/gads/devices")
+def gads_devices(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_gads_device_breakdown, "gads_dev")
+
+@app.get("/api/gads/geo")
+def gads_geo(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_gads_geo_breakdown, "gads_geo")
+
+@app.get("/api/gads/hourly")
+def gads_hourly(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_gads_hourly, "gads_hourly")
+
+@app.get("/api/gads/budget-pacing")
+def gads_budget_pacing(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_gads_budget_pacing, "gads_pacing")
+
+@app.get("/api/ms365/storage")
+def ms365_storage(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_ms365_storage_usage, "ms_storage", 3600)
+
+@app.get("/api/ms365/activity")
+def ms365_activity(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_ms365_app_activity, "ms_activity", 3600)
+
+@app.get("/api/e2e/resources")
+def e2e_resources(session: dict = Depends(auth.require_session)) -> dict[str, Any]:
+    return _extras_endpoint(extras_provider.fetch_e2e_committed_and_images)
 
 
 class SettingsPayload(BaseModel):

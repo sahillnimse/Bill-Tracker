@@ -32,6 +32,23 @@ const realApi = {
   getAwsInstances: () => client.get("/aws/instances").then((r) => r.data),
   getAwsUsageBreakdown: (days = 30) =>
     client.get("/aws/usage-breakdown", { params: { days } }).then((r) => r.data),
+  getAwsWasteScan: () => client.get("/aws/waste-scan").then((r) => r.data),
+  getAwsCostByTag: (tagKey = "Project", days = 30) =>
+    client.get("/aws/cost-by-tag", { params: { tag_key: tagKey, days } }).then((r) => r.data),
+  getAwsRecordTypes: (days = 30) =>
+    client.get("/aws/record-types", { params: { days } }).then((r) => r.data),
+  getAwsSpRecommendation: () => client.get("/aws/sp-recommendation").then((r) => r.data),
+  getRunpodUtilization: () => client.get("/runpod/utilization").then((r) => r.data),
+  getRunpodCostComponents: (days = 30) =>
+    client.get("/runpod/cost-components", { params: { days } }).then((r) => r.data),
+  getGadsSearchTerms: () => client.get("/gads/search-terms").then((r) => r.data),
+  getGadsDevices: () => client.get("/gads/devices").then((r) => r.data),
+  getGadsGeo: () => client.get("/gads/geo").then((r) => r.data),
+  getGadsHourly: () => client.get("/gads/hourly").then((r) => r.data),
+  getGadsBudgetPacing: () => client.get("/gads/budget-pacing").then((r) => r.data),
+  getMs365Storage: () => client.get("/ms365/storage").then((r) => r.data),
+  getMs365Activity: () => client.get("/ms365/activity").then((r) => r.data),
+  getE2eResources: () => client.get("/e2e/resources").then((r) => r.data),
   getMe: () => client.get("/auth/me").then((r) => r.data),
   logout: () => client.post("/auth/logout").then((r) => r.data),
   enrollStart: (email) => client.post("/auth/enroll/start", { email }).then((r) => r.data),

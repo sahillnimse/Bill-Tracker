@@ -25,30 +25,61 @@ E2E_BILLING_PENDING = (
 )
 
 
-def _rest_get(path: str, params: dict | None = None) -> Any:
-    auth_token = e2e_config.auth_token or e2e_config.api_key
-    api_key = e2e_config.api_key
+def _check_token_expiry(auth_token: str) -> str | None:
+    """E2E auth tokens are JWTs and expire. Return a human reason if expired/undecodable."""
+    try:
+        import base64
+        import json as _json
 
-    if (
-        not api_key
-        or "fake" in api_key.lower()
-        or not auth_token
-        or "fake" in auth_token.lower()
-    ):
-        raise RuntimeError(E2E_BILLING_VERIFY_ERROR)
+        parts = auth_token.split(".")
+        if len(parts) != 3:
+            return None  # not a JWT — can't check
+        payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+        exp = payload.get("exp")
+        if exp and time.time() > float(exp):
+            expired_at = datetime.fromtimestamp(float(exp), tz=timezone.utc)
+            return (
+                f"E2E auth token expired at {expired_at.isoformat()} — "
+                "regenerate the token in MyAccount -> Products -> API and update E2E_AUTH_TOKEN."
+            )
+    except Exception:
+        return None
+    return None
+
+
+def _rest_get(path: str, params: dict | None = None) -> Any:
+    api_key = e2e_config.api_key
+    auth_token = e2e_config.auth_token
+
+    if not api_key or "fake" in api_key.lower():
+        raise RuntimeError(E2E_BILLING_VERIFY_ERROR + " (E2E_API_KEY missing)")
+    if not auth_token or "fake" in auth_token.lower():
+        # The API key alone is NOT a valid Bearer credential — E2E requires the
+        # separate auth token (JWT) downloaded alongside the API key.
+        raise RuntimeError(
+            E2E_BILLING_VERIFY_ERROR
+            + " (E2E_AUTH_TOKEN missing — the Bearer auth token is required in "
+            "addition to the API key; download both from MyAccount -> API)"
+        )
+
+    expiry_reason = _check_token_expiry(auth_token)
+    if expiry_reason:
+        raise RuntimeError(expiry_reason)
 
     headers = {
         "Authorization": f"Bearer {auth_token}",
         "Content-Type": "application/json",
     }
-    
+
     # E2E requires project_id and location query parameters for scoping
     query_params = params or {}
     query_params["apikey"] = api_key
     if e2e_config.project_id:
         query_params["project_id"] = e2e_config.project_id
     if e2e_config.location:
-        query_params["location"] = e2e_config.location
+        # E2E location values are capitalized in MyAccount ("Delhi", "Mumbai")
+        query_params["location"] = str(e2e_config.location).strip().capitalize()
 
     try:
         resp = httpx.get(
@@ -58,13 +89,32 @@ def _rest_get(path: str, params: dict | None = None) -> Any:
             timeout=30,
         )
         if resp.status_code in (401, 403):
-            raise RuntimeError(E2E_BILLING_VERIFY_ERROR)
+            # Surface E2E's own error body once — it distinguishes bad key vs
+            # expired token vs wrong project scope.
+            detail = ""
+            try:
+                detail = (resp.text or "")[:300]
+            except Exception:
+                pass
+            logger.warning(
+                "E2E %s returned %s for %s (project_id=%s location=%s): %s",
+                path, resp.status_code, "GET", e2e_config.project_id,
+                query_params.get("location"), detail,
+            )
+            raise RuntimeError(
+                E2E_BILLING_VERIFY_ERROR
+                + f" (HTTP {resp.status_code}"
+                + (f": {detail}" if detail else "")
+                + ")"
+            )
         resp.raise_for_status()
         return resp.json()
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
-            raise RuntimeError(E2E_BILLING_VERIFY_ERROR) from exc
+    except RuntimeError:
         raise
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"E2E Networks API error {exc.response.status_code} on {path}"
+        ) from exc
     except Exception as exc:
         raise RuntimeError(f"Connection to E2E Networks failed: {exc}") from exc
 
