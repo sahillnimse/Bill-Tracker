@@ -1,9 +1,15 @@
 import logging
+import time
+
 import httpx
 
 logger = logging.getLogger("spendwatch.llm_insights")
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+GEMINI_FALLBACK_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 3
 
 
 def generate_ai_summary(insights: list[dict], api_key: str) -> str | None:
@@ -33,17 +39,42 @@ def generate_ai_summary(insights: list[dict], api_key: str) -> str | None:
         f"{bullet_points}"
     )
 
-    try:
-        response = httpx.post(
-            GEMINI_URL,
-            params={"key": api_key},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=8.0,
-        )
-        response.raise_for_status()
-        data = response.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        return text.strip()
-    except Exception as exc:
-        logger.warning("Gemini summary generation failed: %s", exc)
-        return None
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    # Try the primary model with retries, then fall back to a lighter model.
+    for url in (GEMINI_URL, GEMINI_FALLBACK_URL):
+        text = _call_gemini_with_retry(url, api_key, payload)
+        if text is not None:
+            return text
+
+    return None
+
+
+def _call_gemini_with_retry(url: str, api_key: str, payload: dict) -> str | None:
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = httpx.post(
+                url,
+                params={"key": api_key},
+                json=payload,
+                timeout=8.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return text.strip()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES - 1:
+                logger.warning(
+                    "Gemini summary attempt %d/%d failed with %d, retrying...",
+                    attempt + 1, _MAX_RETRIES, status,
+                )
+                time.sleep(2 ** attempt)  # 1s, 2s
+                continue
+            logger.warning("Gemini summary generation failed with status %d", status)
+            return None
+        except Exception:
+            logger.warning("Gemini summary generation failed", exc_info=False)
+            return None
+    return None
