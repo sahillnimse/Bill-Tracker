@@ -286,7 +286,16 @@ def fetch_ms365_data() -> dict[str, Any]:
         )
         sign_in_available = True
     except httpx.HTTPStatusError:
-        logger.warning("signInActivity unavailable (needs AuditLog.Read.All); retrying users without it")
+        # NOTE: this is a PERMANENT, expected condition on this tenant — not an error.
+        # AuditLog.Read.All is granted correctly; signInActivity requires Azure AD
+        # Premium P1/P2 licensing on the tenant, which this tenant doesn't have
+        # (Business Basic/Standard only). See backend/_debug_ms365.py for the
+        # original diagnostic. Logged at debug level since this fires every refresh
+        # cycle and isn't something to act on or alert on.
+        logger.debug(
+            "signInActivity unavailable — tenant lacks Azure AD Premium P1/P2 licensing; "
+            "retrying users without it"
+        )
         users_resp = _graph_get(
             token,
             "/users",
@@ -363,13 +372,20 @@ def fetch_ms365_data() -> dict[str, Any]:
             }
         )
 
-    # MFA status (requires Reports.Read.All — handle gracefully if missing)
+    # MFA status via credentialUserRegistrationDetails.
+    # NOTE: this is a PERMANENT, expected condition on this tenant — not an error.
+    # Reports.Read.All is granted correctly; this endpoint requires Azure AD Premium
+    # P1/P2 licensing, which this tenant doesn't have. Logged at debug level since
+    # this fires every refresh cycle and isn't something to act on or alert on.
     mfa_pending = 0
     try:
         mfa_resp = _graph_get(token, "/reports/credentialUserRegistrationDetails")
         mfa_pending = sum(1 for r in mfa_resp.get("value", []) if not r.get("isMfaRegistered"))
     except httpx.HTTPStatusError:
-        logger.warning("MFA registration report unavailable (needs Reports.Read.All permission)")
+        logger.debug(
+            "MFA registration report unavailable — requires Azure AD Premium P1/P2 "
+            "licensing on the tenant"
+        )
 
     last_week = _last_week_snapshot()
     new_ids_7d = (total_licenses - last_week["total_licenses"]) if last_week else 0

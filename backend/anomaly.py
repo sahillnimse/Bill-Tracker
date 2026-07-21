@@ -62,7 +62,19 @@ def detect_anomaly(
     delta = today_value - mean
     pct = (delta / mean * 100) if mean > 0 else 0.0
 
-    is_anomaly = abs(z) >= settings.z_threshold and abs(delta) >= settings.min_dollar_delta
+    # Guard against false "spend dropped to $0" alerts caused by today's data
+    # not having synced yet (provider billing APIs often lag several hours),
+    # rather than a genuine drop. If today reads as exactly/near zero while
+    # the baseline is clearly nonzero, treat it as incomplete data, not an
+    # anomaly — a real drop to zero would need at least one full sync cycle
+    # to be confirmed on a later run.
+    today_looks_unsynced = today_value <= 0.01 and mean >= settings.min_dollar_delta
+
+    is_anomaly = (
+        abs(z) >= settings.z_threshold
+        and abs(delta) >= settings.min_dollar_delta
+        and not today_looks_unsynced
+    )
 
     if is_anomaly and z >= settings.z_threshold * 1.5:
         severity = "danger"
@@ -114,7 +126,12 @@ def detect_anomaly_sma(
     pct_vs_long = ((today_value - sma_long) / sma_long * 100) if sma_long else 0.0
     delta = today_value - sma_long if sma_long else 0.0
 
-    is_anomaly = abs(pct_vs_long) >= spike_threshold_pct
+    # Same guard as detect_anomaly: a today value of ~$0 against a clearly
+    # nonzero SMA baseline is almost always unsynced billing data, not a real
+    # drop — don't flag it until a later refresh confirms the value.
+    today_looks_unsynced = today_value <= 0.01 and sma_long and sma_long >= 5.0
+
+    is_anomaly = abs(pct_vs_long) >= spike_threshold_pct and not today_looks_unsynced
 
     if is_anomaly and abs(pct_vs_long) >= spike_threshold_pct * 1.5:
         severity = "danger"
