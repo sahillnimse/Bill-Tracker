@@ -64,9 +64,9 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
         <KpiCard accent="ms" label="Cost per user" value={fmt(data.cost_per_user)} delta="blended avg" deltaClass="d-flat" />
         <KpiCard accent="ms" label="MFA pending" value={data.mfa_pending} valueColor={data.mfa_pending > 0 ? "var(--warn)" : undefined}
           delta={data.mfa_pending > 0 ? "security risk" : "all enrolled"} deltaClass={data.mfa_pending > 0 ? "d-up" : "d-flat"} />
-        <KpiCard accent="danger" label="Inactive licensed seats" value={data.inactive_licensed_count}
-          valueColor={data.inactive_licensed_count > 0 ? "var(--danger)" : undefined}
-          delta={data.sign_in_activity_available ? `${fmt(data.inactive_monthly_waste)}/mo wasted` : "sign-in data unavailable"}
+        <KpiCard accent="danger" label="Inactive licensed seats" value={data.sign_in_activity_available ? data.inactive_licensed_count : "—"}
+          valueColor={data.sign_in_activity_available && data.inactive_licensed_count > 0 ? "var(--danger)" : undefined}
+          delta={data.sign_in_activity_available ? `${fmt(data.inactive_monthly_waste)}/mo wasted` : null}
           deltaClass={data.inactive_licensed_count > 0 ? "d-up" : "d-flat"} />
       </div>
 
@@ -157,16 +157,6 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {!data.sign_in_activity_available && (
-        <div className="a-banner">
-          <div className="a-icon">i</div>
-          <div>
-            <div className="a-title">Inactive seat detection unavailable</div>
-            <div className="a-text">Requires AuditLog.Read.All permission on the Azure AD app registration to check sign-in activity.</div>
-          </div>
         </div>
       )}
 

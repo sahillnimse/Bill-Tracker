@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 
@@ -173,7 +171,7 @@ function dataTable(ctx, head, body, y, accent, opts = {}) {
     numericCols.forEach((i) => (columnStyles[i] = { halign: "right" }));
     if (firstColWide) columnStyles[0] = { ...(columnStyles[0] || {}), cellWidth: "auto" };
 
-    autoTable(doc, {
+    doc.autoTable({
         startY: y,
         head: [head],
         body: rows,
@@ -803,6 +801,8 @@ export default function FullReportButton({ overview, label = "Export Full Report
                 awsExtras = {};
             }
 
+            const { default: jsPDF } = await import("jspdf");
+            await import("jspdf-autotable");
             const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
             const ctx = makeCtx(doc);
             ctx.pageProvider = {};
