@@ -14,6 +14,7 @@ import httpx
 
 from anomaly import AnomalySettings, compute_drivers, detect_anomaly, detect_anomaly_sma
 from config import app_config, e2e_config
+from fx import get_usd_exchange_rate
 
 logger = logging.getLogger("spendwatch.e2e_networks")
 
@@ -234,11 +235,16 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
     node_type_costs: dict[str, float] = {}
     node_type_daily: dict[str, dict[str, float]] = {}  # {node_type: {date: amount}}
 
+    # E2E bills natively in INR. Convert every line item to USD right here,
+    # before any aggregation, so every downstream total/series/breakdown in
+    # this payload is USD — consistent with AWS/RunPod/Google Ads.
+    inr_to_usd_rate = get_usd_exchange_rate("INR")
+
     # Parse and aggregate billing line items
     for item in billing_items:
         desc = item.get("description") or ""
         sku = item.get("sku_name") or "General_Charges"
-        amount = item.get("line_item_value") or 0.0
+        amount = (item.get("line_item_value") or 0.0) / inr_to_usd_rate
         
         parsed_date = _parse_date_from_description(desc)
         if not parsed_date:
@@ -318,7 +324,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
         match = re.search(r'Rs\.\s*([\d\.]+)/Hour', price_str)
         if match:
             try:
-                cost_per_hr = float(match.group(1))
+                cost_per_hr = float(match.group(1)) / inr_to_usd_rate
             except ValueError:
                 pass
 
@@ -423,7 +429,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
         last_month_same_period = 0.0
         for item in last_usage:
             desc = item.get("description") or ""
-            amount = item.get("line_item_value") or 0.0
+            amount = (item.get("line_item_value") or 0.0) / inr_to_usd_rate
             parsed_date = _parse_date_from_description(desc)
             if parsed_date and parsed_date <= last_month_end.isoformat():
                 last_month_same_period += amount

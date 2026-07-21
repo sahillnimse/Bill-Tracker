@@ -36,6 +36,23 @@ function spendValue(snapshot) {
 function CustomTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const item = payload[0].payload;
+  if (item.status === "error") {
+    return (
+      <div
+        style={{
+          background: "var(--panel, #16181d)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 8,
+          padding: "8px 12px",
+          fontSize: 13,
+          maxWidth: 220,
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{item.label}</div>
+        <div style={{ color: "var(--t3, #888)" }}>Data unavailable — API issue</div>
+      </div>
+    );
+  }
   return (
     <div
       style={{
@@ -88,14 +105,17 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
     provider: s.provider,
     label: s.label,
     value: spendValue(s),
+    status: s._status === "error" ? "error" : "ok",
   }));
-  const totalSpend = chartData.reduce((sum, s) => sum + s.value, 0);
-  const topProvider = chartData.length
-    ? chartData.reduce((max, s) => (s.value > max.value ? s : max), chartData[0])
+  const okData = chartData.filter((s) => s.status === "ok");
+  const totalSpend = okData.reduce((sum, s) => sum + s.value, 0);
+  const topProvider = okData.length
+    ? okData.reduce((max, s) => (s.value > max.value ? s : max), okData[0])
     : null;
   const trending = snapshots
     .filter((s) => typeof s.vs_last_month_pct === "number")
     .sort((a, b) => Math.abs(b.vs_last_month_pct) - Math.abs(a.vs_last_month_pct))[0];
+  const erroredProviders = chartData.filter((s) => s.status === "error");
 
   return (
     <div className="page" id="page-insights">
@@ -151,17 +171,29 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
           <div className="a-banner" style={{ flexDirection: "column", alignItems: "stretch" }}>
             <div className="a-title" style={{ marginBottom: 12 }}>Spend by provider</div>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }} barCategoryGap="35%" barSize={44}>
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: "currentColor" }} />
                 <YAxis tick={{ fontSize: 12, fill: "currentColor" }} tickFormatter={(v) => `$${v}`} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={52}>
                   {chartData.map((entry) => (
-                    <Cell key={entry.provider} fill={PROVIDER_COLORS[entry.provider] || "var(--cyan)"} />
+                    <Cell
+                      key={entry.provider}
+                      fill={entry.status === "error" ? "var(--border, #2a2b31)" : (PROVIDER_COLORS[entry.provider] || "var(--cyan)")}
+                    />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            {erroredProviders.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "var(--t3, #888)", display: "flex", flexDirection: "column", gap: 4 }}>
+                {erroredProviders.map((p) => (
+                  <div key={p.provider}>
+                    {p.label}: data unavailable — API issue. Will show once resolved.
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

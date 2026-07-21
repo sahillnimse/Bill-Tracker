@@ -28,6 +28,7 @@ import msal
 
 from cache import get_conn
 from config import ms365_config
+from fx import to_usd
 
 logger = logging.getLogger("spendwatch.ms365")
 
@@ -206,8 +207,8 @@ def ms365_insights(data: dict) -> list[dict]:
             "severity": "warn" if abs(change_pct) < 30 else "danger",
             "explanation": (
                 f"Microsoft 365 monthly bill {direction} by {abs(change_pct):.0f}% "
-                f"(₹{abs(round(bill_change)):,.0f}) compared to last week. "
-                f"Current bill: ₹{data.get('monthly_bill', 0):,.0f}."
+                f"(${abs(round(bill_change, 2)):,.2f}) compared to last week. "
+                f"Current bill: ${data.get('monthly_bill', 0):,.2f}."
             ),
             "drivers": [],
         })
@@ -224,7 +225,7 @@ def ms365_insights(data: dict) -> list[dict]:
             "severity": "warn",
             "explanation": (
                 f"{inactive_count} licensed users haven't been active recently, "
-                f"costing an estimated ₹{inactive_waste:,.0f}/month for unused "
+                f"costing an estimated ${inactive_waste:,.2f}/month for unused "
                 f"seats. Consider reassigning or removing these licenses."
             ),
             "drivers": [],
@@ -389,26 +390,35 @@ def fetch_ms365_data() -> dict[str, Any]:
 
     last_week = _last_week_snapshot()
     new_ids_7d = (total_licenses - last_week["total_licenses"]) if last_week else 0
-    bill_change = (monthly_bill - last_week["monthly_bill"]) if last_week else 0.0
+    bill_change_inr = (monthly_bill - last_week["monthly_bill"]) if last_week else 0.0
     inactive_licensed_users.sort(key=lambda u: u["cost"], reverse=True)
-    inactive_monthly_waste = round(sum(u["cost"] for u in inactive_licensed_users), 2)
+    inactive_monthly_waste_inr = round(sum(u["cost"] for u in inactive_licensed_users), 2)
+
+    # All internal math above (monthly_bill, tier costs, per-user costs) is in
+    # INR, since Microsoft Graph doesn't expose real billing and per-seat
+    # costs are configured in .env as INR. Convert only at the boundary so
+    # every field returned from here — same as AWS/RunPod — is USD.
+    monthly_bill_usd = round(to_usd(monthly_bill, "INR"), 2)
+    cost_per_user_usd = round(to_usd(monthly_bill / total_licenses, "INR"), 2) if total_licenses else 0.0
+    for user in inactive_licensed_users:
+        user["cost"] = round(to_usd(user["cost"], "INR"), 2)
 
     return {
         "provider": "ms365",
         "total_licenses": total_licenses,
-        "monthly_bill": monthly_bill,
-        "cost_per_user": round(monthly_bill / total_licenses, 2) if total_licenses else 0.0,
+        "monthly_bill": monthly_bill_usd,
+        "cost_per_user": cost_per_user_usd,
         "basic_count": basic_count,
         "standard_count": standard_count,
         "free_count": free_count,
-        "basic_cost_per_user": ms365_config.basic_license_cost,
-        "standard_cost_per_user": ms365_config.standard_license_cost,
-        "premium_cost_per_user": ms365_config.premium_license_cost,
+        "basic_cost_per_user": round(to_usd(ms365_config.basic_license_cost, "INR"), 2),
+        "standard_cost_per_user": round(to_usd(ms365_config.standard_license_cost, "INR"), 2),
+        "premium_cost_per_user": round(to_usd(ms365_config.premium_license_cost, "INR"), 2),
         "new_ids_7d": new_ids_7d,
-        "bill_change_vs_last_week": round(bill_change, 2),
+        "bill_change_vs_last_week": round(to_usd(bill_change_inr, "INR"), 2),
         "mfa_pending": mfa_pending,
         "inactive_licensed_count": len(inactive_licensed_users),
-        "inactive_monthly_waste": inactive_monthly_waste,
+        "inactive_monthly_waste": round(to_usd(inactive_monthly_waste_inr, "INR"), 2),
         "inactive_licensed_users": inactive_licensed_users[:12],
         "sign_in_activity_available": sign_in_available,
         "license_trend": _license_trend(),

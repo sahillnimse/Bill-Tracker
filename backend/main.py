@@ -344,11 +344,7 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
     set_provider_cache(provider_key, data, days=days)
 
     label = ANOMALY_LABELS.get(provider_key, provider_key)
-    daily_series = data.get("daily_series")
-    if daily_series:
-        today_date = daily_series[-1]["date"]
-    else:
-        today_date = datetime.now(timezone.utc).date().isoformat()
+    today_date = datetime.now(timezone.utc).date().isoformat()
 
     anomaly = data.get("anomaly")
     if anomaly and anomaly.get("is_anomaly"):
@@ -526,6 +522,15 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
         try:
             data = _get_provider_data(key, days=days)
         except Exception:
+            snapshots.append({
+                "provider": key,
+                "label": ANOMALY_LABELS.get(key, key),
+                "today": 0,
+                "month_to_date": 0,
+                "monthly_bill": 0,
+                "vs_last_month_pct": None,
+                "_status": "error",
+            })
             continue
 
         if data.get("_status") != "error":
@@ -536,6 +541,16 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
                 "month_to_date": data.get("month_to_date"),
                 "monthly_bill": data.get("monthly_bill"),
                 "vs_last_month_pct": data.get("vs_last_month_pct"),
+            })
+        else:
+            snapshots.append({
+                "provider": key,
+                "label": ANOMALY_LABELS.get(key, key),
+                "today": 0,
+                "month_to_date": 0,
+                "monthly_bill": 0,
+                "vs_last_month_pct": None,
+                "_status": "error",
             })
 
         anomaly = data.get("anomaly")
