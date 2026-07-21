@@ -2,6 +2,13 @@ import { useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 
+// jspdf-autotable v5 is an ESM package exported as a plain function — it does
+// NOT patch jsPDF.prototype as a side effect (unlike v3.x). It must be called
+// as autoTable(doc, {...}), not doc.autoTable({...}). Since it's dynamically
+// imported (to keep it out of the main bundle), we stash the function here
+// once handleExport awaits the import, so dataTable() below can use it.
+let _autoTable = null;
+
 /* ============================================================
    SpendWatch — Full Report (restructured)
    - Dark branded cover with hero KPI cards
@@ -171,7 +178,7 @@ function dataTable(ctx, head, body, y, accent, opts = {}) {
     numericCols.forEach((i) => (columnStyles[i] = { halign: "right" }));
     if (firstColWide) columnStyles[0] = { ...(columnStyles[0] || {}), cellWidth: "auto" };
 
-    doc.autoTable({
+    _autoTable(doc, {
         startY: y,
         head: [head],
         body: rows,
@@ -802,7 +809,8 @@ export default function FullReportButton({ overview, label = "Export Full Report
             }
 
             const { default: jsPDF } = await import("jspdf");
-            await import("jspdf-autotable");
+            const { default: autoTable } = await import("jspdf-autotable");
+            _autoTable = autoTable;
             const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
             const ctx = makeCtx(doc);
             ctx.pageProvider = {};

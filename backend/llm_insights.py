@@ -30,18 +30,64 @@ def generate_ai_summary(insights: list[dict], api_key: str) -> str | None:
     prompt = (
         "You are explaining company cloud spending to a manager with zero "
         "technical background. Below are today's spending alerts, already "
-        "written in plain English. Write ONE short paragraph (3-4 "
-        "sentences max) that summarizes the overall picture: what's the "
+        "written in plain English. Write ONE short paragraph (3-4 short "
+        "sentences, very simple everyday words) that covers: the single "
         "most important thing to know, roughly how much money is "
-        "involved in total, and is anything urgent. Do not invent any "
-        "numbers not present below. Do not use jargon. Be direct and "
-        "calm, not alarmist.\n\n"
+        "involved in total, and whether anything needs action today. Do "
+        "not invent any numbers not present below. Do not use technical "
+        "terms or jargon of any kind. Be direct and calm, not alarmist.\n\n"
         f"{bullet_points}"
     )
 
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     # Try the primary model with retries, then fall back to a lighter model.
+    for url in (GEMINI_URL, GEMINI_FALLBACK_URL):
+        text = _call_gemini_with_retry(url, api_key, payload)
+        if text is not None:
+            return text
+
+    return None
+
+
+def generate_all_clear_summary(snapshots: list[dict], api_key: str) -> str | None:
+    """
+    Takes real per-provider spend snapshots (today, month-to-date, %
+    change vs last month) and asks Gemini for a short, calm, plain-English
+    paragraph — used when there are zero anomalies. Only real numbers
+    passed in are allowed to appear in the text. Returns None on any
+    failure so the caller can gracefully skip showing the summary card.
+    """
+    if not api_key or not snapshots:
+        return None
+
+    lines = []
+    for s in snapshots:
+        parts = [f"{s['label']}: today ${s['today']:.2f}" if s.get("today") is not None else f"{s['label']}:"]
+        if s.get("month_to_date") is not None:
+            parts.append(f"month-to-date ${s['month_to_date']:.2f}")
+        if s.get("monthly_bill") is not None:
+            parts.append(f"monthly bill ${s['monthly_bill']:.2f}")
+        if s.get("vs_last_month_pct") is not None:
+            parts.append(f"{s['vs_last_month_pct']:+.1f}% vs last month")
+        lines.append(", ".join(parts))
+    bullet_points = "\n".join(f"- {line}" for line in lines)
+
+    prompt = (
+        "You are explaining cloud and software spending to someone with "
+        "zero technical background. There are no unusual alerts today — "
+        "everything is normal. Below are today's real spending numbers "
+        "for each service. Write ONE short paragraph (3-4 short "
+        "sentences) in very simple, everyday words. Say things are "
+        "running normally, then mention the total spend and one or two "
+        "notable numbers from the list. Use only the numbers given below "
+        "— never invent or estimate a number. Do not use technical terms. "
+        "This is a routine, reassuring update, not a warning.\n\n"
+        f"{bullet_points}"
+    )
+
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
     for url in (GEMINI_URL, GEMINI_FALLBACK_URL):
         text = _call_gemini_with_retry(url, api_key, payload)
         if text is not None:

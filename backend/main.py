@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from llm_insights import generate_ai_summary
+from llm_insights import generate_ai_summary, generate_all_clear_summary
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -437,8 +437,7 @@ def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> d
     )
     all_anomalies = get_anomaly_history(limit=20)
     today_str = datetime.now(timezone.utc).date().isoformat()
-    yesterday_str = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
-    anomalies = [a for a in all_anomalies if a["date"] in (today_str, yesterday_str)]
+    anomalies = [a for a in all_anomalies if a["date"] == today_str]
 
     days_left_in_month = 30 - datetime.now(timezone.utc).day
     projected_month_end = round(mtd_total + (today_total * max(days_left_in_month, 0)), 2)
@@ -522,11 +521,23 @@ def anomalies(provider: str | None = None, limit: int = 20, session: dict = Depe
 @app.get("/api/insights")
 def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     results = []
+    snapshots = []
     for key in PROVIDERS:
         try:
             data = _get_provider_data(key, days=days)
         except Exception:
             continue
+
+        if data.get("_status") != "error":
+            snapshots.append({
+                "provider": key,
+                "label": ANOMALY_LABELS.get(key, key),
+                "today": data.get("today"),
+                "month_to_date": data.get("month_to_date"),
+                "monthly_bill": data.get("monthly_bill"),
+                "vs_last_month_pct": data.get("vs_last_month_pct"),
+            })
+
         anomaly = data.get("anomaly")
         if anomaly and anomaly.get("is_anomaly"):
             results.append({
@@ -549,13 +560,23 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
     results.sort(key=lambda r: abs(r.get("delta") or 0), reverse=True)
 
     ai_summary = None
+    today_str = datetime.now(timezone.utc).date().isoformat()
     if results and gemini_config.api_key:
-        cache_key = f"insights_summary:{datetime.now(timezone.utc).date().isoformat()}"
+        cache_key = f"insights_summary:{today_str}"
         cached = get_provider_cache(cache_key, max_age_seconds=3600)
         if cached:
             ai_summary = cached.get("summary")
         else:
             ai_summary = generate_ai_summary(results, gemini_config.api_key)
+            if ai_summary:
+                set_provider_cache(cache_key, {"summary": ai_summary})
+    elif not results and gemini_config.api_key:
+        cache_key = f"insights_all_clear_summary:{today_str}"
+        cached = get_provider_cache(cache_key, max_age_seconds=3600)
+        if cached:
+            ai_summary = cached.get("summary")
+        else:
+            ai_summary = generate_all_clear_summary(snapshots, gemini_config.api_key)
             if ai_summary:
                 set_provider_cache(cache_key, {"summary": ai_summary})
 
@@ -564,6 +585,7 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
         "count": len(results),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "ai_summary": ai_summary,
+        "snapshots": snapshots,
     }
 
 

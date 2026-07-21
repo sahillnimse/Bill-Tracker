@@ -1,5 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+} from "recharts";
 import api from "../api/client";
 
 const ROUTE_MAP = {
@@ -9,6 +18,39 @@ const ROUTE_MAP = {
   ms365: "/ms365",
   e2e: "/e2e",
 };
+
+const PROVIDER_COLORS = {
+  aws: "var(--aws)",
+  runpod: "var(--runpod)",
+  google_ads: "var(--gads)",
+  ms365: "var(--ms)",
+  e2e: "var(--cyan)",
+};
+
+function spendValue(snapshot) {
+  // month_to_date is the most representative figure for most providers;
+  // ms365 reports monthly_bill instead.
+  return snapshot.month_to_date ?? snapshot.monthly_bill ?? snapshot.today ?? 0;
+}
+
+function CustomTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const item = payload[0].payload;
+  return (
+    <div
+      style={{
+        background: "var(--panel, #16181d)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontSize: 13,
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>{item.label}</div>
+      <div>${item.value.toFixed(2)}</div>
+    </div>
+  );
+}
 
 function severityClass(severity) {
   if (severity === "warn") return "a-banner--warn";
@@ -40,7 +82,20 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
 
   if (loading) return <div className="loading-state">Loading insights…</div>;
   if (error) return <div className="error-state">Couldn't load insights: {error}</div>;
-  const { insights, generated_at, ai_summary } = data;
+  const { insights, generated_at, ai_summary, snapshots = [] } = data;
+
+  const chartData = snapshots.map((s) => ({
+    provider: s.provider,
+    label: s.label,
+    value: spendValue(s),
+  }));
+  const totalSpend = chartData.reduce((sum, s) => sum + s.value, 0);
+  const topProvider = chartData.length
+    ? chartData.reduce((max, s) => (s.value > max.value ? s : max), chartData[0])
+    : null;
+  const trending = snapshots
+    .filter((s) => typeof s.vs_last_month_pct === "number")
+    .sort((a, b) => Math.abs(b.vs_last_month_pct) - Math.abs(a.vs_last_month_pct))[0];
 
   return (
     <div className="page" id="page-insights">
@@ -55,6 +110,58 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
           <div>
             <div className="a-title">Today's Summary</div>
             <div className="a-text">{ai_summary}</div>
+          </div>
+        </div>
+      )}
+
+      {chartData.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
+            <div className="a-banner" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <div className="a-text" style={{ opacity: 0.7, fontSize: 12 }}>TOTAL SPEND</div>
+              <div className="a-title" style={{ fontSize: 22 }}>${totalSpend.toFixed(2)}</div>
+            </div>
+            {topProvider && (
+              <div className="a-banner" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                <div className="a-text" style={{ opacity: 0.7, fontSize: 12 }}>TOP SPENDER</div>
+                <div className="a-title" style={{ fontSize: 22 }}>{topProvider.label}</div>
+              </div>
+            )}
+            {trending && (
+              <div className="a-banner" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                <div className="a-text" style={{ opacity: 0.7, fontSize: 12 }}>BIGGEST MOVE</div>
+                <div
+                  className="a-title"
+                  style={{ fontSize: 22, color: trending.vs_last_month_pct >= 0 ? "var(--aws)" : "var(--gads)" }}
+                >
+                  {trending.vs_last_month_pct >= 0 ? "▲" : "▼"} {Math.abs(trending.vs_last_month_pct).toFixed(1)}%
+                </div>
+                <div className="a-text" style={{ fontSize: 12 }}>{trending.label}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="a-banner" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="a-title" style={{ marginBottom: 12 }}>Spend by provider</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: "currentColor" }} />
+                <YAxis tick={{ fontSize: 12, fill: "currentColor" }} tickFormatter={(v) => `$${v}`} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {chartData.map((entry) => (
+                    <Cell key={entry.provider} fill={PROVIDER_COLORS[entry.provider] || "var(--cyan)"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
