@@ -19,7 +19,7 @@ function formatDrivers(drivers, fmt) {
 }
 
 export default function AwsPage({ days = 30, syncVersion = 0 }) {
-  const { data, loading, error } = useProvider("aws", days, syncVersion);
+  const { data, loading, error, sync, syncing } = useProvider("aws", days, syncVersion);
   const [history, setHistory] = useState([]);
   const { fmt } = useCurrency();
 
@@ -48,6 +48,14 @@ export default function AwsPage({ days = 30, syncVersion = 0 }) {
           UnblendedCost · daily granularity · {data.region}
           {data.as_of_date && ` · as of ${data.as_of_date}`}
         </div>
+        <button
+          className="sync-btn"
+          onClick={sync}
+          disabled={syncing}
+          title="Fetch live AWS Cost Explorer data now"
+        >
+          {syncing ? "Fetching…" : "↻ Refresh live data"}
+        </button>
       </div>
 
       {data._error && (

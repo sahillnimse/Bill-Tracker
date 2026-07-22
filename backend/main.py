@@ -382,6 +382,17 @@ def _fetch_and_cache(provider_key: str, days: int = 30) -> dict[str, Any]:
 
 
 def _get_provider_data(provider_key: str, force_refresh: bool = False, days: int = 30) -> dict[str, Any]:
+    # AWS is never fetched automatically — only the manual POST /api/sync/aws endpoint
+    # may call live AWS APIs. All read paths (overview, provider detail, insights) must
+    # always serve from the DB/cache, regardless of TTL or staleness.
+    if provider_key == "aws":
+        cached = get_provider_cache(provider_key, days=days)
+        if cached:
+            cached["_status"] = "cached"
+            return cached
+        # No cached data yet (first run, before any manual sync) — return empty schema.
+        return _get_empty_provider_data(provider_key, "No AWS data yet — click 'Sync now' on the AWS page to fetch live data.")
+
     if not force_refresh:
         cached = get_provider_cache(provider_key, max_age_seconds=app_config.cache_ttl_seconds, days=days)
         if cached:
@@ -498,8 +509,27 @@ def provider_monthly_spend(provider_key: str, year: int, month: int, session: di
 
 @app.post("/api/sync")
 def sync_all(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
-    """Force a fresh pull from every provider's live API."""
-    results = _fetch_all_parallel(lambda key: _fetch_and_cache(key, days=days))
+    """Force a fresh pull from every auto-refresh provider's live API.
+    AWS is intentionally excluded — it is never fetched automatically.
+    Use POST /api/sync/aws to manually refresh AWS data.
+    """
+    results: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=len(AUTO_REFRESH_PROVIDERS)) as pool:
+        future_to_key = {pool.submit(_fetch_and_cache, key, days): key for key in AUTO_REFRESH_PROVIDERS}
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                results[key] = future.result()
+            except Exception as exc:
+                logger.exception("Unhandled error syncing %s", key)
+                results[key] = _get_empty_provider_data(key, str(exc))
+    # For AWS, always serve the last manually-synced cached value.
+    aws_cached = get_provider_cache("aws", days=days)
+    if aws_cached:
+        aws_cached["_status"] = "cached"
+        results["aws"] = aws_cached
+    else:
+        results["aws"] = _get_empty_provider_data("aws", "No AWS data yet — click ‘Refresh live data’ on the AWS page.")
     return {"synced_at": datetime.now(timezone.utc).isoformat(), "providers": results}
 
 @app.post("/api/sync/{provider_key}")
@@ -739,11 +769,25 @@ def update_settings(payload: SettingsPayload, session: dict = Depends(auth.requi
 scheduler = BackgroundScheduler()
 
 
+# Providers that are auto-refreshed by the background scheduler and startup warm-up.
+# AWS is intentionally excluded — it must ONLY be fetched when the user clicks
+# the manual sync button (POST /api/sync/aws). It is never fetched automatically.
+AUTO_REFRESH_PROVIDERS = {k: v for k, v in PROVIDERS.items() if k != "aws"}
+
+
 def _refresh_all_providers() -> None:
-    logger.info("Starting background parallel provider cache refresh...")
+    logger.info("Starting background parallel provider cache refresh (excluding AWS)...")
     try:
-        # Fetch and cache all providers in parallel using the existing ThreadPoolExecutor helper
-        _fetch_all_parallel(lambda key: _fetch_and_cache(key))
+        # Fetch and cache only auto-refresh providers in parallel.
+        # AWS is explicitly excluded and must never be triggered here.
+        with ThreadPoolExecutor(max_workers=len(AUTO_REFRESH_PROVIDERS)) as pool:
+            futures = {pool.submit(_fetch_and_cache, key): key for key in AUTO_REFRESH_PROVIDERS}
+            for future in as_completed(futures):
+                key = futures[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    logger.exception("Background refresh failed for %s", key)
         logger.info("Background provider refresh completed successfully")
     except Exception:
         logger.exception("Background provider refresh failed")
