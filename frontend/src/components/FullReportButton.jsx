@@ -55,7 +55,7 @@ function fmtINR(value) {
     if (value == null || value === "—") return "—";
     const num = parseFloat(value);
     if (isNaN(num)) return String(value);
-    return "Rs. " + Math.round(num).toLocaleString("en-IN");
+    return "₹" + Math.round(num).toLocaleString("en-IN");
 }
 
 function pctStr(v) {
@@ -524,7 +524,7 @@ function buildMs365Section(ctx, data, y, accent) {
         { label: "MFA pending", value: String(data.mfa_pending ?? 0), tone: (data.mfa_pending ?? 0) > 0 ? "danger" : "ok" },
         { label: "New IDs (7d)", value: `${(data.new_ids_7d ?? 0) > 0 ? "+" : ""}${data.new_ids_7d ?? 0}` },
     ], y, accent);
-    y = paragraph(ctx, "All Microsoft 365 figures are true Indian list pricing in INR — the report currency toggle does not apply to this section.", y, { fontSize: 7.5, color: FAINT });
+    y = paragraph(ctx, "All Microsoft 365 figures are in INR (Indian tenant pricing).", y, { fontSize: 7.5, color: FAINT });
 
     if (data.license_trend?.length) {
         y = sectionHeading(ctx, `4.${++n}`, "Monthly Bill Trend", y, accent);
@@ -832,7 +832,7 @@ export default function FullReportButton({ overview, label = "Export Full Report
                 ctx.currentProvider = key;
 
                 let y = providerBanner(ctx, key, num);
-                const providerFmt = key === "ms365" || key === "e2e" ? fmtINR : fmt;
+                const providerFmt = fmtINR; // all providers return INR
                 y = SECTION_BUILDERS[key](ctx, data, y, accent, providerFmt, awsExtras);
 
                 // tag every page of this provider for the running header

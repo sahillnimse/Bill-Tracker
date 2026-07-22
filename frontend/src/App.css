@@ -509,6 +509,9 @@
   transition: opacity .15s, transform .12s, filter .15s;
   position: relative;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .sync-btn:hover {
@@ -524,6 +527,11 @@
   opacity: .4;
   transform: none;
   cursor: default;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 /* ─── CONTENT ─── */

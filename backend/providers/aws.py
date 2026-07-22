@@ -168,6 +168,9 @@ def _commitment_utilization(start: date, end: date) -> dict[str, Any]:
 
 
     
+from fx import to_inr
+
+
 def fetch_aws_monthly_spend(year: int, month: int) -> dict[str, Any]:
     start = date(year, month, 1)
     if month == 12:
@@ -176,14 +179,15 @@ def fetch_aws_monthly_spend(year: int, month: int) -> dict[str, Any]:
         end = date(year, month + 1, 1)
 
     daily = _daily_cost_by_service(start, end)
-    total = round(sum(sum(services.values()) for services in daily.values()), 2)
+    total_usd = sum(sum(services.values()) for services in daily.values())
+    total_inr = round(to_inr(total_usd), 2)
 
     return {
         "provider": "aws",
         "year": year,
         "month": month,
-        "total": total,
-        "currency": "USD",
+        "total": total_inr,
+        "currency": "INR",
         "days_with_data": len(daily),
     }
 
@@ -196,23 +200,25 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     daily = _daily_cost_by_service(start, today + timedelta(days=1))
 
     sorted_days = sorted(daily.keys())
-    daily_totals = [round(sum(daily[d].values()), 2) for d in sorted_days]
+    # Convert all daily totals directly to INR so anomaly detection, baseline mean,
+    # and SMA series are naturally computed in INR.
+    daily_totals = [round(to_inr(sum(daily[d].values())), 2) for d in sorted_days]
 
     settings = AnomalySettings(
         z_threshold=app_config.z_score_threshold,
-        min_dollar_delta=app_config.min_dollar_delta,
+        min_dollar_delta=to_inr(app_config.min_dollar_delta),
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly(daily_totals, settings)
     anomaly_sma = detect_anomaly_sma(daily_totals)
 
     if anomaly.is_anomaly or anomaly_sma.is_anomaly:
-        # Pivot already-in-memory daily {date: {svc: amt}} → {svc: {date: amt}}
+        # Pivot already-in-memory daily {date: {svc: amt}} → {svc: {date: amt_inr}}
         svc_daily: dict[str, dict[str, float]] = {}
         for d in sorted_days:
             for svc, amt in daily.get(d, {}).items():
                 bucket = svc_daily.setdefault(svc, {})
-                bucket[d] = bucket.get(d, 0.0) + amt
+                bucket[d] = bucket.get(d, 0.0) + to_inr(amt)
         anomaly_drivers = compute_drivers(svc_daily, sorted_days, settings)
     else:
         anomaly_drivers = []
@@ -221,9 +227,9 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     yesterday_total = daily_totals[-2] if len(daily_totals) >= 2 else 0.0
     today_total = daily_totals[-1] if daily_totals else 0.0
 
-    # Month-to-date = sum of days within current calendar month
+    # Month-to-date = sum of days within current calendar month (in INR)
     mtd_days = [d for d in sorted_days if d.startswith(today.strftime("%Y-%m"))]
-    mtd_total = round(sum(sum(daily[d].values()) for d in mtd_days), 2)
+    mtd_total = round(sum(sum(to_inr(amt) for amt in daily[d].values()) for d in mtd_days), 2)
 
     # Calculate last month same period
     import calendar
@@ -242,7 +248,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
 
     try:
         last_daily = _daily_cost_by_service(last_month_start, last_month_end + timedelta(days=1))
-        last_month_same_period = sum(sum(services.values()) for services in last_daily.values())
+        last_month_same_period = sum(sum(to_inr(amt) for amt in services.values()) for services in last_daily.values())
     except Exception as exc:
         logger.warning("Failed to fetch prior month same period cost for AWS: %s", exc)
         last_month_same_period = 0.0
@@ -257,7 +263,8 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
     service_totals: dict[str, float] = {}
     for d in mtd_days:
         for svc, amt in daily[d].items():
-            service_totals[svc] = service_totals.get(svc, 0.0) + amt
+            amt_inr = to_inr(amt)
+            service_totals[svc] = service_totals.get(svc, 0.0) + amt_inr
     top_services = sorted(service_totals.items(), key=lambda kv: kv[1], reverse=True)[:6]
     total_svc = sum(service_totals.values()) or 1.0
 
@@ -274,13 +281,14 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         for period in resp.get("ResultsByTime", []):
             for group in period.get("Groups", []):
                 service = group["Keys"][0]
-                cost = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                cost_usd = float(group["Metrics"]["UnblendedCost"]["Amount"])
                 usage = float(group["Metrics"]["UsageQuantity"]["Amount"])
+                cost_inr = to_inr(cost_usd)
                 is_ignored = any(x in service.lower() for x in ["tax", "support", "credit", "subscription"])
-                if cost > 5.0 and usage < 0.05 and not is_ignored:
+                if cost_usd > 5.0 and usage < 0.05 and not is_ignored:
                     low_utilization_spend.append({
                         "name": service,
-                        "cost": round(cost, 2),
+                        "cost": round(cost_inr, 2),
                         "usage": round(usage, 4)
                     })
         low_utilization_spend.sort(key=lambda x: x["cost"], reverse=True)
@@ -289,7 +297,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
 
     avg_per_day = round(sum(daily_totals) / len(daily_totals), 2) if daily_totals else 0.0
 
-    raw_daily_series = [{"date": d, "value": round(sum(daily[d].values()), 2)} for d in sorted_days]
+    raw_daily_series = [{"date": d, "value": round(sum(to_inr(amt) for amt in daily[d].values()), 2)} for d in sorted_days]
     daily_series = compute_sma_series(raw_daily_series, short_window=7, long_window=20)
 
     diagnostics: dict[str, Any] = {}
@@ -300,18 +308,26 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
 
     try:
         linked_accounts = _monthly_cost_by_dimension(month_start, query_end, "LINKED_ACCOUNT")
+        for item in linked_accounts:
+            if "amount" in item:
+                item["amount"] = round(to_inr(item["amount"]), 2)
     except Exception as exc:
         logger.warning("AWS linked account breakdown unavailable: %s", exc)
         diagnostics["linked_accounts"] = "Linked account breakdown unavailable"
 
     try:
         usage_types = _monthly_cost_by_dimension(month_start, query_end, "USAGE_TYPE", limit=10)
+        for item in usage_types:
+            if "amount" in item:
+                item["amount"] = round(to_inr(item["amount"]), 2)
     except Exception as exc:
         logger.warning("AWS usage type breakdown unavailable: %s", exc)
         diagnostics["usage_types"] = "Usage type breakdown unavailable"
 
     try:
         forecast = _month_end_forecast(today)
+        if "amount" in forecast:
+            forecast["amount"] = round(to_inr(forecast["amount"]), 2)
     except Exception as exc:
         logger.warning("AWS cost forecast unavailable: %s", exc)
         reason = _reason_from_exc(exc, "ce:GetCostForecast")
@@ -320,12 +336,19 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
 
     try:
         commitment_utilization = _commitment_utilization(month_start, query_end)
+        sp = commitment_utilization.get("savings_plans")
+        if sp:
+            if "net_savings" in sp:
+                sp["net_savings"] = round(to_inr(sp["net_savings"]), 2)
+            if "on_demand_cost_equivalent" in sp:
+                sp["on_demand_cost_equivalent"] = round(to_inr(sp["on_demand_cost_equivalent"]), 2)
     except Exception as exc:
         logger.warning("AWS commitment utilization unavailable: %s", exc)
         diagnostics["commitment_utilization"] = "Commitment utilization unavailable"
 
     return {
         "provider": "aws",
+        "currency": "INR",
         "today": today_total,
         "yesterday": yesterday_total,
         "month_to_date": mtd_total,
@@ -345,7 +368,7 @@ def fetch_aws_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
-        "anomaly_explanation": explain_anomaly("AWS", anomaly, anomaly_drivers, currency_symbol="$"),
+        "anomaly_explanation": explain_anomaly("AWS", anomaly, anomaly_drivers, currency_symbol="₹"),
         "region": aws_config.region,
         "as_of_date": today_str,
     }

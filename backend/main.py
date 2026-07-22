@@ -428,19 +428,14 @@ def health() -> dict[str, str]:
 def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> dict[str, Any]:
     """Aggregated snapshot across all providers for the Overview page."""
     data = _fetch_all_parallel(lambda key: _get_provider_data(key, days=days))
-    # All active providers report spend normalized to USD by their fetch functions.
-    # ms365 is included but contributes 0 to today/MTD totals because it returns
-    # monthly_bill (INR) rather than a today/month_to_date key — harmless.
-    USD_SPEND_PROVIDERS = {"aws", "runpod", "google_ads", "ms365"}
+    # All providers report spend in INR directly.
     today_total = sum(
-        d.get("today", 0) or 0
+        (d.get("today", 0) or 0)
         for k, d in data.items()
-        if k in USD_SPEND_PROVIDERS
     )
     mtd_total = sum(
-        d.get("month_to_date", 0) or d.get("monthly_cost", 0) or 0
+        (d.get("month_to_date", 0) or d.get("monthly_bill", 0) or 0)
         for k, d in data.items()
-        if k in USD_SPEND_PROVIDERS
     )
     all_anomalies = get_anomaly_history(limit=20)
     today_str = datetime.now(timezone.utc).date().isoformat()
@@ -476,6 +471,19 @@ def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> d
             "pct_change": movers[0]["pct_change"]
         }
 
+    # data_as_of: the most recent provider cache write time so the UI can show
+    # "Synced at <time data was actually fetched>" rather than "now".
+    fetched_timestamps = [
+        d["_fetched_at"]
+        for d in data.values()
+        if isinstance(d.get("_fetched_at"), (int, float))
+    ]
+    data_as_of = (
+        datetime.fromtimestamp(max(fetched_timestamps), tz=timezone.utc).isoformat()
+        if fetched_timestamps
+        else datetime.now(timezone.utc).isoformat()
+    )
+
     return {
         "providers": data,
         "today_total": round(today_total, 2),
@@ -483,6 +491,7 @@ def overview(days: int = 30, session: dict = Depends(auth.require_session)) -> d
         "projected_month_end": projected_month_end,
         "active_anomalies": anomalies,
         "biggest_mover": biggest_mover,
+        "data_as_of": data_as_of,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -607,7 +616,7 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
     ai_summary = None
     today_str = datetime.now(timezone.utc).date().isoformat()
     if results and gemini_config.api_key:
-        cache_key = f"insights_summary:{today_str}"
+        cache_key = f"insights_summary_v3:{today_str}"
         cached = get_provider_cache(cache_key, max_age_seconds=3600)
         if cached:
             ai_summary = cached.get("summary")
@@ -616,7 +625,7 @@ def insights(days: int = 30, session: dict = Depends(auth.require_session)) -> d
             if ai_summary:
                 set_provider_cache(cache_key, {"summary": ai_summary})
     elif not results and gemini_config.api_key:
-        cache_key = f"insights_all_clear_summary:{today_str}"
+        cache_key = f"insights_all_clear_summary_v3:{today_str}"
         cached = get_provider_cache(cache_key, max_age_seconds=3600)
         if cached:
             ai_summary = cached.get("summary")

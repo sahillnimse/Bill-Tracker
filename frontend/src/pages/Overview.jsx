@@ -4,11 +4,6 @@ import AnomalyHistory from "../components/AnomalyHistory";
 import FullReportButton from "../components/FullReportButton";
 import { useCurrency } from "../context/CurrencyContext";
 
-function fmtINR(value) {
-  if (value === null || value === undefined) return "—";
-  return "₹" + Math.round(value).toLocaleString("en-IN");
-}
-
 function formatDrivers(drivers, fmt) {
   if (!drivers?.length) return null;
   return drivers
@@ -30,14 +25,14 @@ const PROVIDER_META = {
   e2e: { icon: "🚀", color: "var(--cyan)", bg: "rgba(0,229,212,0.06)", label: "E2E Networks", route: "/e2e" },
 };
 
-function ProviderCard({ name, data, onNavigate, fmt, fmtINR }) {
+function ProviderCard({ name, data, onNavigate, fmt }) {
   const meta = PROVIDER_META[name] || {};
   const isAnomaly = data?.anomaly?.is_anomaly;
   const status = isAnomaly ? "Anomaly detected" : data?._status === "error" ? "Connection error" : "Normal";
   const pip = pipClass(data);
 
-  const today = name === "ms365" ? fmtINR(data?.monthly_bill) : name === "e2e" ? fmtINR(data?.today) : fmt(data?.today);
-  const mtd = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : name === "e2e" ? fmtINR(data?.month_to_date) : fmt(data?.month_to_date);
+  const today = name === "ms365" ? fmt(data?.monthly_bill) : fmt(data?.today);
+  const mtd = name === "ms365" ? String(data?.total_licenses ?? "—") + " users" : fmt(data?.month_to_date);
 
   const thirdLabel = name === "aws" ? "vs avg" : name === "runpod" ? "vs avg" : name === "google_ads" ? "ROAS" : name === "e2e" ? "Active nodes" : "New IDs 7d";
   const thirdVal = name === "aws" || name === "runpod"
@@ -304,7 +299,6 @@ export default function Overview({ overview, loading, error }) {
             data={providers[key] || {}}
             onNavigate={navigate}
             fmt={fmt}
-            fmtINR={fmtINR}
           />
         ))}
       </div>

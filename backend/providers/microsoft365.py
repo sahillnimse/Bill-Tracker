@@ -28,7 +28,6 @@ import msal
 
 from cache import get_conn
 from config import ms365_config
-from fx import to_usd
 
 logger = logging.getLogger("spendwatch.ms365")
 
@@ -394,31 +393,30 @@ def fetch_ms365_data() -> dict[str, Any]:
     inactive_licensed_users.sort(key=lambda u: u["cost"], reverse=True)
     inactive_monthly_waste_inr = round(sum(u["cost"] for u in inactive_licensed_users), 2)
 
-    # All internal math above (monthly_bill, tier costs, per-user costs) is in
-    # INR, since Microsoft Graph doesn't expose real billing and per-seat
-    # costs are configured in .env as INR. Convert only at the boundary so
-    # every field returned from here — same as AWS/RunPod — is USD.
-    monthly_bill_usd = round(to_usd(monthly_bill, "INR"), 2)
-    cost_per_user_usd = round(to_usd(monthly_bill / total_licenses, "INR"), 2) if total_licenses else 0.0
-    for user in inactive_licensed_users:
-        user["cost"] = round(to_usd(user["cost"], "INR"), 2)
+    # MS365 billing is natively in INR (Microsoft bills in INR for Indian tenants).
+    # The frontend's Microsoft365Page uses fmtINR() and explicitly opts out of the
+    # global USD/INR toggle — so we return all monetary values in INR here.
+    # Do NOT convert to USD; that was causing the displayed numbers to be ~84x too small.
+    cost_per_user_inr = round(monthly_bill / total_licenses, 2) if total_licenses else 0.0
+    inactive_monthly_waste_inr = round(sum(u["cost"] for u in inactive_licensed_users), 2)
 
     return {
         "provider": "ms365",
+        "currency": "INR",
         "total_licenses": total_licenses,
-        "monthly_bill": monthly_bill_usd,
-        "cost_per_user": cost_per_user_usd,
+        "monthly_bill": monthly_bill,                          # INR
+        "cost_per_user": cost_per_user_inr,                    # INR
         "basic_count": basic_count,
         "standard_count": standard_count,
         "free_count": free_count,
-        "basic_cost_per_user": round(to_usd(ms365_config.basic_license_cost, "INR"), 2),
-        "standard_cost_per_user": round(to_usd(ms365_config.standard_license_cost, "INR"), 2),
-        "premium_cost_per_user": round(to_usd(ms365_config.premium_license_cost, "INR"), 2),
+        "basic_cost_per_user": ms365_config.basic_license_cost,      # INR
+        "standard_cost_per_user": ms365_config.standard_license_cost, # INR
+        "premium_cost_per_user": ms365_config.premium_license_cost,  # INR
         "new_ids_7d": new_ids_7d,
-        "bill_change_vs_last_week": round(to_usd(bill_change_inr, "INR"), 2),
+        "bill_change_vs_last_week": round(bill_change_inr, 2),       # INR
         "mfa_pending": mfa_pending,
         "inactive_licensed_count": len(inactive_licensed_users),
-        "inactive_monthly_waste": round(to_usd(inactive_monthly_waste_inr, "INR"), 2),
+        "inactive_monthly_waste": inactive_monthly_waste_inr,         # INR
         "inactive_licensed_users": inactive_licensed_users[:12],
         "sign_in_activity_available": sign_in_available,
         "license_trend": _license_trend(),

@@ -58,17 +58,20 @@ def fetch_google_ads_monthly_spend(year: int, month: int) -> dict[str, Any]:
     except Exception:
         pass
 
-    exchange_rate = 1.0
-    if currency_code != "USD":
+    # Compute how many INR = 1 unit of the account's native currency
+    if currency_code == "INR":
+        inr_factor = 1.0
+    else:
+        inr_factor = 84.0  # fallback
         try:
             resp = httpx.get("https://open.er-api.com/v6/latest/USD", timeout=5)
             if resp.status_code == 200:
-                rate = resp.json().get("rates", {}).get(currency_code)
-                if rate:
-                    exchange_rate = float(rate)
+                data = resp.json()
+                usd_to_inr = data.get("rates", {}).get("INR") or 84.0
+                native_per_usd = data.get("rates", {}).get(currency_code) or 1.0
+                inr_factor = usd_to_inr / native_per_usd
         except Exception:
-            fallbacks = {"INR": 84.0, "EUR": 0.92, "GBP": 0.78}
-            exchange_rate = fallbacks.get(currency_code, 1.0)
+            pass  # use fallback already set
 
     start_date = date(year, month, 1)
     if month == 12:
@@ -82,14 +85,14 @@ def fetch_google_ads_monthly_spend(year: int, month: int) -> dict[str, Any]:
         WHERE segments.date BETWEEN '{start_date.strftime("%Y-%m-%d")}' AND '{end_date.strftime("%Y-%m-%d")}'
     """
     rows = _run_query(client, monthly_query)
-    total = sum((r.metrics.cost_micros / 1_000_000) / exchange_rate for r in rows)
+    total = sum((r.metrics.cost_micros / 1_000_000) * inr_factor for r in rows)
 
     return {
         "provider": "google_ads",
         "year": year,
         "month": month,
         "total": round(total, 2),
-        "currency": "USD",
+        "currency": "INR",
     }
 
 
@@ -111,22 +114,23 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         logger.warning("Failed to fetch customer currency and timezone: %s", exc)
         diagnostics["currency_fetch"] = f"Failed to fetch currency: {exc}"
 
-    # 2. Get USD exchange rate for this currency code
-    exchange_rate = 1.0
-    if currency_code != "USD":
+    # 2. Compute INR conversion factor (how many INR per 1 unit of account's native currency)
+    if currency_code == "INR":
+        inr_factor = 1.0
+    else:
+        inr_factor = 84.0  # fallback
         try:
             resp = httpx.get("https://open.er-api.com/v6/latest/USD", timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                rate = data.get("rates", {}).get(currency_code)
-                if rate:
-                     exchange_rate = float(rate)
-                     logger.info("Fetched exchange rate for %s: %s", currency_code, exchange_rate)
+                usd_to_inr = data.get("rates", {}).get("INR") or 84.0
+                native_per_usd = data.get("rates", {}).get(currency_code) or 1.0
+                inr_factor = usd_to_inr / native_per_usd
+                logger.info("INR factor for %s: %.4f (USD→INR=%.2f, native/USD=%.4f)",
+                            currency_code, inr_factor, usd_to_inr, native_per_usd)
         except Exception as exc:
-            logger.warning("Failed to fetch exchange rate for %s: %s. Using fallback.", currency_code, exc)
+            logger.warning("Failed to fetch exchange rate for %s: %s. Using fallback INR factor.", currency_code, exc)
             diagnostics["exchange_rate_fetch"] = f"Exchange rate fetch error, using fallback. {exc}"
-            fallbacks = {"INR": 84.0, "EUR": 0.92, "GBP": 0.78}
-            exchange_rate = fallbacks.get(currency_code, 1.0)
 
     # Determine local date in Google Ads customer's configured timezone
     try:
@@ -158,8 +162,8 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
     total_clicks = 0
     total_impressions = 0
     for row in daily_rows:
-        # Convert cost from local currency to USD
-        cost = (row.metrics.cost_micros / 1_000_000) / exchange_rate
+        # Convert cost from native currency to INR
+        cost = (row.metrics.cost_micros / 1_000_000) * inr_factor
         daily_series.append({"date": row.segments.date, "value": round(cost, 2)})
         clicks = row.metrics.clicks or 0
         impressions = row.metrics.impressions or 0
@@ -172,7 +176,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
             "value": round((cost / impressions) * 1000, 4) if impressions else 0.0,
         })
         total_conversions += row.metrics.conversions
-        total_conv_value += (row.metrics.conversions_value or 0.0) / exchange_rate
+        total_conv_value += (row.metrics.conversions_value or 0.0) * inr_factor
         total_cost += cost
         total_clicks += clicks
         total_impressions += impressions
@@ -211,10 +215,10 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
     campaigns = []
     total_today_cost = sum(r.metrics.cost_micros for r in campaign_rows) or 1
     for r in campaign_rows:
-        cost = (r.metrics.cost_micros / 1_000_000) / exchange_rate
+        cost = (r.metrics.cost_micros / 1_000_000) * inr_factor
         # Use a LOCAL variable so the outer overall_avg_cpc is never overwritten
-        campaign_avg_cpc = ((r.metrics.average_cpc or 0) / 1_000_000) / exchange_rate
-        conv_val = (r.metrics.conversions_value or 0) / exchange_rate
+        campaign_avg_cpc = ((r.metrics.average_cpc or 0) / 1_000_000) * inr_factor
+        conv_val = (r.metrics.conversions_value or 0) * inr_factor
         campaigns.append(
             {
                 "name": r.campaign.name,
@@ -240,7 +244,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         for r in network_rows:
             name = r.segments.ad_network_type.name.replace("_", " ").title()
             entry = network_totals.setdefault(name, {"amount": 0.0, "conversions": 0.0})
-            entry["amount"] += (r.metrics.cost_micros / 1_000_000) / exchange_rate
+            entry["amount"] += (r.metrics.cost_micros / 1_000_000) * inr_factor
             entry["conversions"] += r.metrics.conversions
         total_network_cost = sum(v["amount"] for v in network_totals.values()) or 1.0
         network_breakdown = [
@@ -267,7 +271,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         """
         rank_rows = _run_query(client, rank_query)
         for r in rank_rows:
-            cost = (r.metrics.cost_micros / 1_000_000) / exchange_rate
+            cost = (r.metrics.cost_micros / 1_000_000) * inr_factor
             rank_lost = r.metrics.search_rank_lost_impression_share
             budget_lost = r.metrics.search_budget_lost_impression_share
             if cost > 0 and (rank_lost or budget_lost):
@@ -296,7 +300,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         wasted_spend = [
             {
                 "name": r.campaign.name,
-                "amount": round((r.metrics.cost_micros / 1_000_000) / exchange_rate, 2),
+                "amount": round((r.metrics.cost_micros / 1_000_000) * inr_factor, 2),
                 "clicks": r.metrics.clicks,
                 "conversions": r.metrics.conversions,
             }
@@ -319,7 +323,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
             for r in _run_query(client, campaign_daily_query):
                 name = r.campaign.name
                 d = r.segments.date
-                cost = (r.metrics.cost_micros / 1_000_000) / exchange_rate
+                cost = (r.metrics.cost_micros / 1_000_000) * inr_factor
                 bucket = campaign_daily.setdefault(name, {})
                 bucket[d] = bucket.get(d, 0.0) + cost
         except Exception as exc:
@@ -350,7 +354,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
             WHERE segments.date BETWEEN '{last_month_start_str}' AND '{last_month_end_str}'
         """
         last_rows = _run_query(client, last_month_query)
-        last_month_same_period = sum((r.metrics.cost_micros / 1_000_000) / exchange_rate for r in last_rows)
+        last_month_same_period = sum((r.metrics.cost_micros / 1_000_000) * inr_factor for r in last_rows)
     except Exception as exc:
         logger.warning("Failed to fetch prior month same period cost for Google Ads: %s", exc)
         last_month_same_period = 0.0
@@ -372,6 +376,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
 
     return {
         "provider": "google_ads",
+        "currency": "INR",
         "today": round(today_spend, 2),
         "month_to_date": mtd_spend,
         "vs_last_month_pct": vs_last_month_pct,
@@ -391,5 +396,5 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
-        "anomaly_explanation": explain_anomaly("Google Ads", anomaly, anomaly_drivers, currency_symbol="$"),
+        "anomaly_explanation": explain_anomaly("Google Ads", anomaly, anomaly_drivers, currency_symbol="₹"),
     }

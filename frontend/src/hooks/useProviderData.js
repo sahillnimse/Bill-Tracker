@@ -15,7 +15,9 @@ export function useOverview(days = 30) {
     try {
       const res = await api.getOverview(days);
       setData(res);
-      setLastSyncedAt(res.generated_at);
+      // Use data_as_of (real cache write time) so the Synced label reflects
+      // when the data was actually fetched from providers, not when the API responded.
+      setLastSyncedAt(res.data_as_of ?? res.generated_at);
     } catch (err) {
       setError(err.message || "Failed to load overview");
     } finally {

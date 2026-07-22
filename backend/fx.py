@@ -42,3 +42,21 @@ def to_usd(amount: float, currency_code: str) -> float:
         return amount
     rate = get_usd_exchange_rate(currency_code)
     return amount / rate
+
+
+def to_inr(amount_usd: float) -> float:
+    """Converts `amount_usd` from USD to INR using live rate (or fallback)."""
+    if not amount_usd:
+        return 0.0
+    rate = get_usd_exchange_rate("INR")
+    return amount_usd * rate
+
+
+def to_inr_from_currency(amount: float, currency_code: str) -> float:
+    """Converts `amount` in `currency_code` to INR."""
+    if not amount or currency_code == "INR":
+        return amount or 0.0
+    if currency_code == "USD":
+        return to_inr(amount)
+    usd = to_usd(amount, currency_code)
+    return to_inr(usd)

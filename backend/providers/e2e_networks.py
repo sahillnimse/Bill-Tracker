@@ -90,23 +90,22 @@ def _rest_get(path: str, params: dict | None = None) -> Any:
             timeout=30,
         )
         if resp.status_code in (401, 403):
-            # Surface E2E's own error body once — it distinguishes bad key vs
-            # expired token vs wrong project scope.
-            detail = ""
+            # Surface E2E's own error message — e.g. "Customer Email not verified!" or "Access Denied Read.."
+            err_msg = ""
             try:
-                detail = (resp.text or "")[:300]
+                data = resp.json()
+                if isinstance(data, dict):
+                    err_msg = data.get("errors") or data.get("message") or ""
             except Exception:
-                pass
+                err_msg = (resp.text or "")[:200]
+
             logger.warning(
                 "E2E %s returned %s for %s (project_id=%s location=%s): %s",
                 path, resp.status_code, "GET", e2e_config.project_id,
-                query_params.get("location"), detail,
+                query_params.get("location"), err_msg,
             )
             raise RuntimeError(
-                E2E_BILLING_VERIFY_ERROR
-                + f" (HTTP {resp.status_code}"
-                + (f": {detail}" if detail else "")
-                + ")"
+                f"E2E Networks API error: {err_msg}" if err_msg else E2E_BILLING_VERIFY_ERROR
             )
         resp.raise_for_status()
         return resp.json()
@@ -207,7 +206,7 @@ def fetch_e2e_monthly_spend(year: int, month: int) -> dict[str, Any]:
             "currency": "INR",
         }
     except Exception as exc:
-        logger.exception("Failed to fetch historical spend for E2E")
+        logger.warning("Failed to fetch historical spend for E2E: %s", exc)
         return {
             "provider": "e2e",
             "year": year,
@@ -235,16 +234,11 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
     node_type_costs: dict[str, float] = {}
     node_type_daily: dict[str, dict[str, float]] = {}  # {node_type: {date: amount}}
 
-    # E2E bills natively in INR. Convert every line item to USD right here,
-    # before any aggregation, so every downstream total/series/breakdown in
-    # this payload is USD — consistent with AWS/RunPod/Google Ads.
-    inr_to_usd_rate = get_usd_exchange_rate("INR")
-
-    # Parse and aggregate billing line items
+    # E2E bills natively in INR. Keep all values natively in INR.
     for item in billing_items:
         desc = item.get("description") or ""
         sku = item.get("sku_name") or "General_Charges"
-        amount = (item.get("line_item_value") or 0.0) / inr_to_usd_rate
+        amount = float(item.get("line_item_value") or 0.0)
         
         parsed_date = _parse_date_from_description(desc)
         if not parsed_date:
@@ -324,7 +318,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
         match = re.search(r'Rs\.\s*([\d\.]+)/Hour', price_str)
         if match:
             try:
-                cost_per_hr = float(match.group(1)) / inr_to_usd_rate
+                cost_per_hr = float(match.group(1))
             except ValueError:
                 pass
 
@@ -429,7 +423,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
         last_month_same_period = 0.0
         for item in last_usage:
             desc = item.get("description") or ""
-            amount = (item.get("line_item_value") or 0.0) / inr_to_usd_rate
+            amount = float(item.get("line_item_value") or 0.0)
             parsed_date = _parse_date_from_description(desc)
             if parsed_date and parsed_date <= last_month_end.isoformat():
                 last_month_same_period += amount
@@ -461,6 +455,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
 
     return {
         "provider": "e2e",
+        "currency": "INR",
         "today": today_cost,
         "yesterday": yesterday_cost,
         "avg_per_day": avg_per_day,

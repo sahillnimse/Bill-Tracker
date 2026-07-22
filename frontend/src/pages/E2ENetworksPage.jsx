@@ -8,12 +8,7 @@ import api from "../api/client";
 import MonthlySpendCard from "../components/MonthlySpendCard";
 import { monthToDateLabel } from "../utils/dateRangeLabel";
 
-function fmtINR(value) {
-  if (value == null || value === "—") return "—";
-  const num = parseFloat(value);
-  if (isNaN(num)) return value;
-  return "₹" + Math.round(num).toLocaleString("en-IN");
-}
+import { useCurrency } from "../context/CurrencyContext";
 
 function formatHours(hours = 0) {
   return `${hours.toFixed(1)}h`;
@@ -29,7 +24,7 @@ function formatDrivers(drivers, fmt) {
 export default function E2ENetworksPage({ days = 30, syncVersion = 0 }) {
   const { data, loading, error } = useProvider("e2e", days, syncVersion);
   const [history, setHistory] = useState([]);
-  const fmt = fmtINR;
+  const { fmt } = useCurrency();
 
   useEffect(() => {
     api.getAnomalies("e2e").then(setHistory).catch(() => { });

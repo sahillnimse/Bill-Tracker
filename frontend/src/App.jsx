@@ -88,6 +88,8 @@ function AppShell() {
           syncedAt={lastSyncedAt}
           days={days}
           onDaysChange={setDays}
+          onSync={syncAll}
+          syncing={syncing}
         >
           <ProfileMenu />
         </Topbar>

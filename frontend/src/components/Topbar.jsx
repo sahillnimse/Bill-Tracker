@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useCurrency } from "../context/CurrencyContext";
 
 const RANGES = [
   { label: "7 days", days: 7 },
@@ -19,19 +18,28 @@ const PAGE_LABELS = {
   "/settings": "Settings",
 };
 
-export default function Topbar({ syncedAt, days, onDaysChange, children }) {
+export default function Topbar({ syncedAt, days, onDaysChange, onSync, syncing, children }) {
   const [open, setOpen] = useState(false);
   const dropRef = useRef(null);
-  const { currency, toggle, rate, rateLoaded } = useCurrency();
   const navigate = useNavigate();
   const location = useLocation();
 
   const isRoot = location.pathname === "/";
+  const isSettings = location.pathname === "/settings";
   const pageLabel = PAGE_LABELS[location.pathname];
 
-  const formattedTime = syncedAt
-    ? new Date(syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-    : "—";
+  const formattedTime = (() => {
+    if (!syncedAt) return "—";
+    const d = new Date(syncedAt);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) {
+      return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+    // Older cache — show "Mon 14 Jul, 2:41 PM" so the user knows it's stale
+    return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })
+      + ", " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  })();
 
   const selectedLabel = RANGES.find((r) => r.days === days)?.label ?? "1 month";
 
@@ -65,26 +73,12 @@ export default function Topbar({ syncedAt, days, onDaysChange, children }) {
       </div>
 
       <div className="tb-r">
-        <span className="sync-time">
+        <span
+          className="sync-time"
+          title={syncedAt ? `Data fetched: ${new Date(syncedAt).toLocaleString()}` : ""}
+        >
           Synced {formattedTime}
         </span>
-
-        {/* ── Currency toggle ── */}
-        <button
-          className="range-btn"
-          onClick={toggle}
-          title={
-            rateLoaded
-              ? `1 USD = ₹${rate.toFixed(2)} · click to switch`
-              : "Loading exchange rate…"
-          }
-          style={{ minWidth: 72, fontVariantNumeric: "tabular-nums" }}
-        >
-          {currency === "USD" ? "$ USD" : "₹ INR"}
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-            <path d="M5 1v8M2 4l3-3 3 3M2 6l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
 
         {/* ── Time-range dropdown ── */}
         <div className="range-wrap" ref={dropRef}>
@@ -126,6 +120,29 @@ export default function Topbar({ syncedAt, days, onDaysChange, children }) {
             </div>
           )}
         </div>
+
+        {!isSettings && onSync && (
+          <button
+            className="sync-btn"
+            onClick={onSync}
+            disabled={syncing}
+            title="Fetch live data from all providers now"
+          >
+            <svg
+              width="13" height="13" viewBox="0 0 13 13" fill="none"
+              style={{
+                flexShrink: 0,
+                animation: syncing ? "spin 1s linear infinite" : "none",
+              }}
+            >
+              <path
+                d="M11.5 6.5A5 5 0 1 1 6.5 1.5M6.5 1.5L9 4M6.5 1.5L4 4"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+              />
+            </svg>
+            {syncing ? "Syncing…" : "Refresh live data"}
+          </button>
+        )}
 
         {children}
       </div>

@@ -74,12 +74,12 @@ export default function Microsoft365Page({ syncVersion = 0 }) {
         <div className="da-card" data-accent="ms">
           <div className="da-label">Standard licences</div>
           <div className="da-val" style={{ color: "var(--ms)" }}>{data.standard_count}</div>
-          <div className="da-sub">{fmt(data.standard_count * (data.standard_cost_per_user || 830))}/mo est.</div>
+          <div className="da-sub">{fmt(data.standard_count * (data.standard_cost_per_user ?? 0))}/mo est.</div>
         </div>
         <div className="da-card" data-accent="teal">
           <div className="da-label">Business Basic licences</div>
           <div className="da-val" style={{ color: "var(--teal)" }}>{data.basic_count}</div>
-          <div className="da-sub">{fmt(data.basic_count * (data.basic_cost_per_user || 170))}/mo est.</div>
+          <div className="da-sub">{fmt(data.basic_count * (data.basic_cost_per_user ?? 0))}/mo est.</div>
         </div>
         <div className="da-card" data-accent="t3">
           <div className="da-label">Free / trial seats</div>

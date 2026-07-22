@@ -23,6 +23,7 @@ import httpx
 
 from anomaly import AnomalySettings, compute_drivers, detect_anomaly, detect_anomaly_sma, explain_anomaly
 from config import app_config, runpod_config
+from fx import to_inr
 
 logger = logging.getLogger("spendwatch.runpod")
 
@@ -152,8 +153,8 @@ def fetch_runpod_monthly_spend(year: int, month: int) -> dict[str, Any]:
         "provider": "runpod",
         "year": year,
         "month": month,
-        "total": round(total, 2),
-        "currency": "USD",
+        "total": round(to_inr(total), 2),
+        "currency": "INR",
     }
 
 
@@ -208,7 +209,8 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
 
     for row in pod_billing_rows:
         day = (row.get("time") or "")[:10]
-        amount = row.get("amount") or 0.0
+        amount_usd = row.get("amount") or 0.0
+        amount = to_inr(amount_usd)
         ms = row.get("timeBilledMs") or 0
         gpu = row.get("gpuTypeId") or "Unknown GPU"
 
@@ -220,7 +222,8 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
 
     for row in serverless_billing_rows:
         day = (row.get("time") or "")[:10]
-        amount = row.get("amount") or 0.0
+        amount_usd = row.get("amount") or 0.0
+        amount = to_inr(amount_usd)
         ms = row.get("timeBilledMs") or 0
         endpoint = row.get("endpointId") or "Unknown endpoint"
 
@@ -291,8 +294,8 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     now_utc = datetime.now(timezone.utc)
     pods_out = []
     for p in active_pods:
-        cost_per_hr = p.get("costPerHr") or 0.0
-        adjusted_cost_per_hr = p.get("adjustedCostPerHr") or cost_per_hr
+        cost_per_hr = to_inr(p.get("costPerHr") or 0.0)
+        adjusted_cost_per_hr = to_inr(p.get("adjustedCostPerHr") or 0.0) or cost_per_hr
         savings_per_hr = max(0.0, cost_per_hr - adjusted_cost_per_hr)
 
         # Uptime based on lastStartedAt
@@ -337,11 +340,11 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
             "id": p.get("id"),
             "name": p.get("name"),
             "status": p.get("desiredStatus"),
-            "cost_per_hr": cost_per_hr,
-            "adjusted_cost_per_hr": adjusted_cost_per_hr,
-            "savings_per_hr": round(savings_per_hr, 4),
-            "cost_per_gpu_hr": round(cost_per_gpu_hr, 4),
-            "adjusted_cost_per_gpu_hr": round(adjusted_cost_per_gpu_hr, 4),
+            "cost_per_hr": round(cost_per_hr, 2),
+            "adjusted_cost_per_hr": round(adjusted_cost_per_hr, 2),
+            "savings_per_hr": round(savings_per_hr, 2),
+            "cost_per_gpu_hr": round(cost_per_gpu_hr, 2),
+            "adjusted_cost_per_gpu_hr": round(adjusted_cost_per_gpu_hr, 2),
             "gpu": gpu_name,
             "gpu_count": gpu_count,
             "uptime_seconds": uptime_sec,
@@ -379,7 +382,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
     try:
         last_pod_rows = _fetch_billing_range(last_month_start_dt, last_month_end_dt, kind="pods")
         last_endpoint_rows = _fetch_billing_range(last_month_start_dt, last_month_end_dt, kind="endpoints")
-        last_month_same_period = sum(row.get("amount") or 0.0 for row in last_pod_rows + last_endpoint_rows)
+        last_month_same_period = sum(to_inr(row.get("amount") or 0.0) for row in last_pod_rows + last_endpoint_rows)
     except Exception as exc:
         logger.warning("Failed to fetch prior month same period cost for RunPod: %s", exc)
         last_month_same_period = 0.0
@@ -408,7 +411,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
 
     settings = AnomalySettings(
         z_threshold=app_config.z_score_threshold,
-        min_dollar_delta=app_config.min_dollar_delta,
+        min_dollar_delta=to_inr(app_config.min_dollar_delta),
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly([d["value"] for d in daily_series], settings)
@@ -420,6 +423,7 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         anomaly_drivers = []
     return {
         "provider": "runpod",
+        "currency": "INR",
         "today": today_cost,
         "yesterday": yesterday_cost,
         "avg_per_day": avg_per_day,
@@ -436,14 +440,14 @@ def fetch_runpod_data(days: int = 30) -> dict[str, Any]:
         "anomaly": anomaly.__dict__,
         "anomaly_sma": anomaly_sma.__dict__,
         "anomaly_drivers": anomaly_drivers,
-        "anomaly_explanation": explain_anomaly("RunPod", anomaly, anomaly_drivers, currency_symbol="$"),
+        "anomaly_explanation": explain_anomaly("RunPod", anomaly, anomaly_drivers, currency_symbol="₹"),
         "as_of": datetime.now(timezone.utc).isoformat(),
         "empty_data_reason": empty_data_reason,
         # Aggregated stats
         "spot_count": spot_count,
         "secure_count": secure_count,
-        "spot_cost_per_hr": round(spot_cost_per_hr, 4),
-        "secure_cost_per_hr": round(secure_cost_per_hr, 4),
-        "total_savings_per_hr": round(total_savings_per_hr, 4),
+        "spot_cost_per_hr": round(spot_cost_per_hr, 2),
+        "secure_cost_per_hr": round(secure_cost_per_hr, 2),
+        "total_savings_per_hr": round(total_savings_per_hr, 2),
         "total_running_gpus": total_running_gpus,
     }

@@ -10,6 +10,7 @@ import {
   Cell,
 } from "recharts";
 import api from "../api/client";
+import { useCurrency } from "../context/CurrencyContext";
 
 const ROUTE_MAP = {
   aws: "/aws",
@@ -27,13 +28,7 @@ const PROVIDER_COLORS = {
   e2e: "var(--cyan)",
 };
 
-function spendValue(snapshot) {
-  // month_to_date is the most representative figure for most providers;
-  // ms365 reports monthly_bill instead.
-  return snapshot.month_to_date ?? snapshot.monthly_bill ?? snapshot.today ?? 0;
-}
-
-function CustomTooltip({ active, payload }) {
+function CustomTooltip({ active, payload, fmt }) {
   if (!active || !payload || !payload.length) return null;
   const item = payload[0].payload;
   if (item.status === "error") {
@@ -64,7 +59,7 @@ function CustomTooltip({ active, payload }) {
       }}
     >
       <div style={{ fontWeight: 600, marginBottom: 2 }}>{item.label}</div>
-      <div>${item.value.toFixed(2)}</div>
+      <div>{fmt ? fmt(item.value) : `₹${Math.round(item.value).toLocaleString("en-IN")}`}</div>
     </div>
   );
 }
@@ -76,6 +71,7 @@ function severityClass(severity) {
 
 export default function InsightsPage({ days = 30, syncVersion = 0 }) {
   const navigate = useNavigate();
+  const { fmt } = useCurrency();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,10 +97,11 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
   if (error) return <div className="error-state">Couldn't load insights: {error}</div>;
   const { insights, generated_at, ai_summary, snapshots = [] } = data;
 
+  // All providers now return amounts in INR — use value directly.
   const chartData = snapshots.map((s) => ({
     provider: s.provider,
     label: s.label,
-    value: spendValue(s),
+    value: s.month_to_date ?? s.monthly_bill ?? s.today ?? 0,
     status: s._status === "error" ? "error" : "ok",
   }));
   const okData = chartData.filter((s) => s.status === "ok");
@@ -146,7 +143,7 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
           >
             <div className="a-banner" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
               <div className="a-text" style={{ opacity: 0.7, fontSize: 12 }}>TOTAL SPEND</div>
-              <div className="a-title" style={{ fontSize: 22 }}>${totalSpend.toFixed(2)}</div>
+              <div className="a-title" style={{ fontSize: 22 }}>{fmt(totalSpend)}</div>
             </div>
             {topProvider && (
               <div className="a-banner" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
@@ -173,8 +170,8 @@ export default function InsightsPage({ days = 30, syncVersion = 0 }) {
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }} barCategoryGap="35%" barSize={44}>
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: "currentColor" }} />
-                <YAxis tick={{ fontSize: 12, fill: "currentColor" }} tickFormatter={(v) => `$${v}`} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
+                <YAxis tick={{ fontSize: 12, fill: "currentColor" }} tickFormatter={(v) => fmt(v, { notation: "compact" })} />
+                <Tooltip content={<CustomTooltip fmt={fmt} />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={52}>
                   {chartData.map((entry) => (
                     <Cell
