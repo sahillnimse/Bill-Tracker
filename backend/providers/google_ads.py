@@ -13,6 +13,7 @@ from google.ads.googleads.client import GoogleAdsClient
 
 from anomaly import AnomalySettings, compute_drivers, detect_anomaly, compute_sma_series, detect_anomaly_sma, explain_anomaly
 from config import app_config, google_ads_config
+from fx import to_inr
 
 logger = logging.getLogger("spendwatch.google_ads")
 
@@ -186,7 +187,7 @@ def fetch_google_ads_data(days: int = 30) -> dict[str, Any]:
     values = [d["value"] for d in daily_series]
     settings = AnomalySettings(
         z_threshold=app_config.z_score_threshold,
-        min_dollar_delta=app_config.min_dollar_delta,
+        min_dollar_delta=to_inr(app_config.min_dollar_delta),
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly(values, settings)

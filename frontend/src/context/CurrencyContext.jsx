@@ -12,6 +12,15 @@ export function CurrencyProvider({ children }) {
         if (inr == null || inr === "—") return "—";
         const num = parseFloat(inr);
         if (isNaN(num)) return String(inr);
+        if (opts.notation === "compact") {
+            const absNum = Math.abs(num);
+            let str = "";
+            if (absNum >= 1_00_00_000) str = (num / 1_00_00_000).toFixed(1).replace(/\.0$/, "") + "Cr";
+            else if (absNum >= 1_00_000) str = (num / 1_00_000).toFixed(1).replace(/\.0$/, "") + "L";
+            else if (absNum >= 1000) str = (num / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+            else str = Math.round(num).toString();
+            return "₹" + str;
+        }
         const defaultOpts = { minimumFractionDigits: 0, maximumFractionDigits: 0, ...opts };
         return "₹" + Math.round(num).toLocaleString("en-IN", defaultOpts);
     }, []);

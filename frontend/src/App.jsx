@@ -21,6 +21,8 @@ import "./App.css";
 
 function badgesFromInsights(insights, overview) {
   const badges = {};
+
+  // Map backend provider keys → sidebar nav keys
   const keyByProvider = {
     aws: "aws",
     runpod: "runpod",
@@ -29,6 +31,7 @@ function badgesFromInsights(insights, overview) {
     e2e: "e2e",
   };
 
+  // 1. Read from insights array (z-score anomalies from backend)
   for (const item of insights || []) {
     const key = keyByProvider[item.provider];
     if (!key) continue;
@@ -38,11 +41,33 @@ function badgesFromInsights(insights, overview) {
     if (item.severity !== "warn") badges[key].className = "b-danger";
   }
 
-  const result = {};
-  for (const [key, { className, count }] of Object.entries(badges)) {
-    result[key] = { className, text: String(count) };
+  // 2. Also check overview providers directly for any anomaly flag
+  // (catches SMA anomalies that insights endpoint may miss)
+  const providers = overview?.providers || {};
+  for (const [provKey, pdata] of Object.entries(providers)) {
+    const key = keyByProvider[provKey];
+    if (!key || !pdata) continue;
+    const hasZScore = pdata.anomaly?.is_anomaly;
+    const hasSma = pdata.anomaly_sma?.is_anomaly;
+    if (hasZScore || hasSma) {
+      if (!badges[key]) {
+        badges[key] = { className: "b-danger", count: 1 };
+      }
+      badges[key].className = "b-danger";
+    }
+    // Provider connection errors → warn badge
+    if (pdata._status === "error" && !badges[key]) {
+      badges[key] = { className: "b-warn", count: 0, text: "!" };
+    }
   }
 
+  // 3. Build final result with text labels
+  const result = {};
+  for (const [key, { className, count, text }] of Object.entries(badges)) {
+    result[key] = { className, text: text ?? (count > 0 ? String(count) : "!") };
+  }
+
+  // 4. MS365 new users badge (informational)
   const newIds = overview?.providers?.ms365?.new_ids_7d;
   if (!result.ms && newIds > 0) {
     result.ms = { className: "b-warn", text: `+${newIds}` };
@@ -71,7 +96,9 @@ function AppShell() {
     return () => { cancelled = true; };
   }, [days, syncVersion]);
 
-  const anomalyCount = insightsData?.count ?? 0;
+  const insightsCount = insightsData?.count ?? 0;
+  const overviewAnomalyCount = overview?.active_anomalies?.length ?? 0;
+  const anomalyCount = Math.max(insightsCount, overviewAnomalyCount);
   const providerBadges = badgesFromInsights(insightsData?.insights, overview);
 
   return (

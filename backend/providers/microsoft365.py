@@ -206,8 +206,8 @@ def ms365_insights(data: dict) -> list[dict]:
             "severity": "warn" if abs(change_pct) < 30 else "danger",
             "explanation": (
                 f"Microsoft 365 monthly bill {direction} by {abs(change_pct):.0f}% "
-                f"(${abs(round(bill_change, 2)):,.2f}) compared to last week. "
-                f"Current bill: ${data.get('monthly_bill', 0):,.2f}."
+                f"(₹{abs(round(bill_change, 2)):,.0f}) compared to last week. "
+                f"Current bill: ₹{data.get('monthly_bill', 0):,.0f}."
             ),
             "drivers": [],
         })
@@ -224,7 +224,7 @@ def ms365_insights(data: dict) -> list[dict]:
             "severity": "warn",
             "explanation": (
                 f"{inactive_count} licensed users haven't been active recently, "
-                f"costing an estimated ${inactive_waste:,.2f}/month for unused "
+                f"costing an estimated ₹{inactive_waste:,.0f}/month for unused "
                 f"seats. Consider reassigning or removing these licenses."
             ),
             "drivers": [],

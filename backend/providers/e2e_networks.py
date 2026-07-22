@@ -14,7 +14,7 @@ import httpx
 
 from anomaly import AnomalySettings, compute_drivers, detect_anomaly, detect_anomaly_sma
 from config import app_config, e2e_config
-from fx import get_usd_exchange_rate
+from fx import get_usd_exchange_rate, to_inr
 
 logger = logging.getLogger("spendwatch.e2e_networks")
 
@@ -350,7 +350,7 @@ def fetch_e2e_data(days: int = 30) -> dict[str, Any]:
     # Anomaly checks
     settings = AnomalySettings(
         z_threshold=app_config.z_score_threshold,
-        min_dollar_delta=app_config.min_dollar_delta,
+        min_dollar_delta=to_inr(app_config.min_dollar_delta),
         baseline_window_days=app_config.baseline_window_days,
     )
     anomaly = detect_anomaly([d["value"] for d in daily_series], settings)

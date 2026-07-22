@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 * {
   box-sizing: border-box;
@@ -56,8 +56,9 @@ body,
 body {
   font-family: var(--sans);
   background:
-    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(0, 229, 212, 0.10), transparent 60%),
-    radial-gradient(ellipse 700px 400px at 100% 20%, rgba(199, 107, 255, 0.07), transparent 60%),
+    radial-gradient(ellipse 1000px 600px at 10% -5%, rgba(0, 229, 212, 0.12), transparent 60%),
+    radial-gradient(ellipse 800px 500px at 100% 15%, rgba(199, 107, 255, 0.09), transparent 60%),
+    radial-gradient(ellipse 600px 400px at 50% 100%, rgba(180, 255, 57, 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   color: var(--t1);
@@ -87,12 +88,14 @@ input {
 @keyframes pIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
+    filter: blur(2px);
   }
 
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
 }
 
@@ -210,4 +213,31 @@ input {
   60% {
     box-shadow: 0 0 0 6px rgba(251, 113, 133, 0);
   }
+}
+
+/* ── New global keyframes ── */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 229, 212, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(0, 229, 212, 0); }
+}
+
+@keyframes shimmerSlide {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }

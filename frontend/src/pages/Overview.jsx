@@ -215,36 +215,44 @@ export default function Overview({ overview, loading, error }) {
       </div>
 
       {/* ── ANOMALY STRIP ── */}
-      {topAnomaly && (
-        <div className="anomaly-strip2">
-          <div className="anomaly-strip2-icon">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-              <path d="M7 5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
+      {topAnomaly && (() => {
+        const pData = providers?.[topAnomaly.provider] || {};
+        const aData = pData.anomaly?.is_anomaly ? pData.anomaly : pData.anomaly_sma?.is_anomaly ? pData.anomaly_sma : null;
+        const pct = topAnomaly.pct_vs_baseline ?? aData?.pct_vs_baseline;
+        const baseline = topAnomaly.baseline_mean ?? aData?.baseline_mean;
+        const hasPct = pct != null;
+
+        return (
+          <div className="anomaly-strip2">
+            <div className="anomaly-strip2-icon">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                <path d="M7 5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div className="anomaly-strip2-body">
+              <span className="anomaly-strip2-title">{providerLabel(topAnomaly.provider)} anomaly</span>
+              {" "}— {hasPct ? `${pct > 0 ? "+" : ""}${pct}% vs baseline of ${fmt(baseline)}/day.` : (topAnomaly.message || "Unusual spend pattern detected.")}
+              {(() => {
+                const drivers = pData?.anomaly_drivers;
+                const text = formatDrivers(drivers, fmt);
+                return text ? ` Driven by: ${text}.` : null;
+              })()}
+              {pData?.anomaly_explanation && (
+                <div className="a-text" style={{ marginTop: 6, opacity: 0.85 }}>
+                  {pData.anomaly_explanation}
+                </div>
+              )}
+            </div>
+            <button
+              className="anomaly-strip2-cta"
+              onClick={() => navigate(`/${topAnomaly.provider === "google_ads" ? "google-ads" : topAnomaly.provider}`)}
+            >
+              Investigate →
+            </button>
           </div>
-          <div className="anomaly-strip2-body">
-            <span className="anomaly-strip2-title">{providerLabel(topAnomaly.provider)} anomaly</span>
-            {" "}— {topAnomaly.pct_vs_baseline > 0 ? "+" : ""}{topAnomaly.pct_vs_baseline}% vs baseline of {fmt(topAnomaly.baseline_mean)}/day.
-            {(() => {
-              const drivers = providers?.[topAnomaly.provider]?.anomaly_drivers;
-              const text = formatDrivers(drivers, fmt);
-              return text ? ` Driven by: ${text}.` : null;
-            })()}
-            {providers?.[topAnomaly.provider]?.anomaly_explanation && (
-              <div className="a-text" style={{ marginTop: 6, opacity: 0.85 }}>
-                {providers[topAnomaly.provider].anomaly_explanation}
-              </div>
-            )}
-          </div>
-          <button
-            className="anomaly-strip2-cta"
-            onClick={() => navigate(`/${topAnomaly.provider === "google_ads" ? "google-ads" : topAnomaly.provider}`)}
-          >
-            Investigate →
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── BIGGEST MOVER STRIP ── */}
       {biggest_mover && (

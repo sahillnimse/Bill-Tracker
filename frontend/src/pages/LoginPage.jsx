@@ -21,18 +21,18 @@ const PROVIDERS = [
 ];
 
 const LEDGER_ROWS = [
-    { p: "aws", label: "EC2 m6a.xlarge · ap-south-1", amt: 412.4 },
-    { p: "runpod", label: "Serverless e95th84 · A6000", amt: 236.1 },
-    { p: "gads", label: "LH_Search_Lawyers_Drafting", amt: 118.6 },
-    { p: "aws", label: "RDS db.t4g.medium", amt: 96.3 },
-    { p: "ms", label: "Business Basic ×14 seats", amt: 79.2 },
-    { p: "aws", label: "NAT Gateway hours", amt: 64.8 },
-    { p: "runpod", label: "Pod spot · RTX A5000", amt: 51.5 },
-    { p: "gads", label: "Search Partners network", amt: 42.9 },
-    { p: "e2e", label: "CPU node · Mumbai", amt: 18.7 },
-    { p: "aws", label: "CloudWatch metrics", amt: 12.2 },
-    { p: "ms", label: "Business Standard ×1", amt: 9.6 },
-    { p: "aws", label: "ELB usage", amt: 8.4 },
+    { p: "aws", label: "EC2 Cluster • ap-south-1", amt: "••••" },
+    { p: "runpod", label: "Serverless GPUs • High Compute", amt: "••••" },
+    { p: "gads", label: "Search & Display Campaigns", amt: "••••" },
+    { p: "aws", label: "RDS Managed Database", amt: "••••" },
+    { p: "ms", label: "Enterprise Workspace Seats", amt: "••••" },
+    { p: "aws", label: "NAT Gateway Traffic", amt: "••••" },
+    { p: "runpod", label: "GPU Spot Instances", amt: "••••" },
+    { p: "gads", label: "Ad Network Placement", amt: "••••" },
+    { p: "e2e", label: "Compute Nodes • Regional", amt: "••••" },
+    { p: "aws", label: "CloudWatch Telemetry", amt: "••••" },
+    { p: "ms", label: "Cloud Workspace Licenses", amt: "••••" },
+    { p: "aws", label: "Elastic Load Balancing", amt: "••••" },
 ];
 
 const TICKER_LINES = [
@@ -58,29 +58,6 @@ function usePrefersReducedMotion() {
     return reduced;
 }
 
-function useCountUp(target, durationMs = 1600, start = true) {
-    const [display, setDisplay] = useState(0);
-    const reduced = usePrefersReducedMotion();
-    useEffect(() => {
-        if (!start) return;
-        if (reduced) {
-            setDisplay(target);
-            return;
-        }
-        let raf;
-        const t0 = performance.now();
-        function tick(now) {
-            const progress = Math.min((now - t0) / durationMs, 1);
-            const eased = 1 - Math.pow(1 - progress, 4);
-            setDisplay(target * eased);
-            if (progress < 1) raf = requestAnimationFrame(tick);
-        }
-        raf = requestAnimationFrame(tick);
-        return () => cancelAnimationFrame(raf);
-    }, [target, durationMs, start, reduced]);
-    return display;
-}
-
 function useRotatingIndex(length, intervalMs = 2800) {
     const [index, setIndex] = useState(0);
     useEffect(() => {
@@ -102,6 +79,7 @@ function ParticleField() {
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         let raf, particles = [], w = 0, h = 0;
+        let mouse = { x: -1000, y: -1000 };
 
         function resize() {
             w = canvas.parentElement.clientWidth;
@@ -114,41 +92,67 @@ function ParticleField() {
         }
 
         function init() {
-            const count = Math.max(20, Math.floor((w * h) / 26000));
+            const count = Math.max(35, Math.floor((w * h) / 18000));
             particles = Array.from({ length: count }, () => ({
                 x: Math.random() * w,
                 y: Math.random() * h,
-                vx: (Math.random() - 0.5) * 0.18,
-                vy: (Math.random() - 0.5) * 0.18,
-                r: Math.random() * 1.3 + 0.5,
+                vx: (Math.random() - 0.5) * 0.35,
+                vy: (Math.random() - 0.5) * 0.35,
+                r: Math.random() * 1.8 + 0.6,
+                baseR: Math.random() * 1.8 + 0.6,
             }));
         }
 
         function step() {
             ctx.clearRect(0, 0, w, h);
-            const linkDist = 130;
+            const linkDist = 140;
+            const mouseDist = 160;
+
             for (const p of particles) {
                 p.x += p.vx; p.y += p.vy;
                 if (p.x < 0 || p.x > w) p.vx *= -1;
                 if (p.y < 0 || p.y > h) p.vy *= -1;
+
+                // Mouse interaction
+                const dx = mouse.x - p.x;
+                const dy = mouse.y - p.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < mouseDist) {
+                    const force = (1 - dist / mouseDist) * 0.4;
+                    p.x -= (dx / dist) * force * 3;
+                    p.y -= (dy / dist) * force * 3;
+                }
             }
+
             for (let i = 0; i < particles.length; i++) {
                 for (let j = i + 1; j < particles.length; j++) {
                     const a = particles[i], b = particles[j];
                     const dx = a.x - b.x, dy = a.y - b.y;
                     const dist = Math.hypot(dx, dy);
                     if (dist < linkDist) {
-                        ctx.strokeStyle = `rgba(0, 229, 212, ${0.12 * (1 - dist / linkDist)})`;
-                        ctx.lineWidth = 0.6;
+                        ctx.strokeStyle = `rgba(0, 229, 212, ${0.18 * (1 - dist / linkDist)})`;
+                        ctx.lineWidth = 0.8;
                         ctx.beginPath();
                         ctx.moveTo(a.x, a.y);
                         ctx.lineTo(b.x, b.y);
                         ctx.stroke();
                     }
                 }
+
+                // Connect to mouse
+                const mDist = Math.hypot(mouse.x - particles[i].x, mouse.y - particles[i].y);
+                if (mDist < mouseDist) {
+                    ctx.strokeStyle = `rgba(180, 255, 57, ${0.35 * (1 - mDist / mouseDist)})`;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(mouse.x, mouse.y);
+                    ctx.stroke();
+                }
             }
+
             for (const p of particles) {
-                ctx.fillStyle = "rgba(244, 246, 251, 0.30)";
+                ctx.fillStyle = "rgba(244, 246, 251, 0.45)";
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
                 ctx.fill();
@@ -156,12 +160,28 @@ function ParticleField() {
             raf = requestAnimationFrame(step);
         }
 
+        const handleMouseMove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+        };
+
+        const handleMouseLeave = () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        };
+
         resize(); init(); step();
         const onResize = () => { resize(); init(); };
         window.addEventListener("resize", onResize);
+        window.addEventListener("mousemove", handleMouseMove);
+        document.body.addEventListener("mouseleave", handleMouseLeave);
+
         return () => {
             cancelAnimationFrame(raf);
             window.removeEventListener("resize", onResize);
+            window.removeEventListener("mousemove", handleMouseMove);
+            document.body.removeEventListener("mouseleave", handleMouseLeave);
         };
     }, [reduced]);
 
@@ -174,7 +194,10 @@ function AuroraBackdrop() {
             <div className="lp-aurora-blob lp-aurora-a" />
             <div className="lp-aurora-blob lp-aurora-b" />
             <div className="lp-aurora-blob lp-aurora-c" />
+            <div className="lp-aurora-blob lp-aurora-d" />
+            <div className="lp-grid-lines" />
             <ParticleField />
+            <div className="lp-scanline" />
             <div className="lp-noise" />
         </div>
     );
@@ -216,8 +239,8 @@ function PulseLine() {
             const baseY = h * 0.62;
             const grad = ctx.createLinearGradient(0, 0, w, 0);
             grad.addColorStop(0, "rgba(0,229,212,0)");
-            grad.addColorStop(0.25, "rgba(0,229,212,0.55)");
-            grad.addColorStop(0.75, "rgba(180,255,57,0.5)");
+            grad.addColorStop(0.25, "rgba(0,229,212,0.6)");
+            grad.addColorStop(0.75, "rgba(180,255,57,0.55)");
             grad.addColorStop(1, "rgba(180,255,57,0)");
 
             ctx.beginPath();
@@ -227,7 +250,7 @@ function PulseLine() {
                 else ctx.lineTo(x, y);
             }
             ctx.strokeStyle = grad;
-            ctx.lineWidth = 1.6;
+            ctx.lineWidth = 1.8;
             ctx.stroke();
 
             // faint echo line
@@ -237,11 +260,11 @@ function PulseLine() {
                 if (x === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
-            ctx.strokeStyle = "rgba(142,151,175,0.14)";
+            ctx.strokeStyle = "rgba(142,151,175,0.18)";
             ctx.lineWidth = 1;
             ctx.stroke();
 
-            t += 0.016;
+            t += 0.018;
             raf = requestAnimationFrame(draw);
         }
 
@@ -275,7 +298,6 @@ function providerColor(key) {
 }
 
 function LedgerTape() {
-    // duplicate rows for a seamless loop
     const rows = useMemo(() => [...LEDGER_ROWS, ...LEDGER_ROWS], []);
     return (
         <div className="lp-ledger" role="presentation">
@@ -283,7 +305,7 @@ function LedgerTape() {
                 <span className="lp-ledger-dot lp-ledger-dot--r" />
                 <span className="lp-ledger-dot lp-ledger-dot--y" />
                 <span className="lp-ledger-dot lp-ledger-dot--g" />
-                <span className="lp-ledger-title">xarka / spend.ledger</span>
+                <span className="lp-ledger-title">spendwatch / live.ledger</span>
                 <span className="lp-ledger-live">
                     <span className="lp-live-pulse" />
                     LIVE
@@ -303,7 +325,10 @@ function LedgerTape() {
                                 {PROVIDERS.find((x) => x.key === r.p)?.label}
                             </span>
                             <span className="lp-ledger-item">{r.label}</span>
-                            <span className="lp-ledger-amt lp-num">₹{r.amt.toFixed(1)}</span>
+                            <span className="lp-ledger-amt lp-masked">
+                                <span className="lp-blur-text">₹99,999</span>
+                                <span className="lp-lock-badge">🔒 Hidden</span>
+                            </span>
                         </div>
                     ))}
                 </div>
@@ -320,7 +345,7 @@ function ProviderRail() {
             {PROVIDERS.map((p, i) => (
                 <div className="lp-rail-item" key={p.key} style={{ animationDelay: `${0.5 + i * 0.08}s` }}>
                     <div className="lp-rail-top">
-                        <span className="lp-rail-dot" style={{ background: p.color, boxShadow: `0 0 10px ${"currentColor"}` }} />
+                        <span className="lp-rail-dot" style={{ background: p.color, boxShadow: `0 0 10px ${p.color}` }} />
                         <span className="lp-rail-label">{p.label}</span>
                         <span className="lp-rail-share lp-num">{p.share}%</span>
                     </div>
@@ -348,63 +373,49 @@ function ActivityTicker() {
     );
 }
 
-/* ---------------------- left panel ---------------------- */
+function use3dTilt() {
+    const cardRef = useRef(null);
 
-function MarketingPanel() {
-    const spend = useCountUp(92643, 1800);
-    return (
-        <div className="lp-left">
-            <div className="lp-left-inner">
-                <div className="lp-brand-row lp-reveal" style={{ animationDelay: "0.05s" }}>
-                    <div className="lp-mark">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-                            <path d="M3 16 8 9l4 4 5-8 4 6" stroke="#0A0D16" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </div>
-                    <div className="lp-brand-text">
-                        <span className="lp-brand-name">SpendWatch</span>
-                        <span className="lp-brand-sub">LEDGER · LIVE</span>
-                    </div>
-                </div>
+    useEffect(() => {
+        const card = cardRef.current;
+        if (!card) return;
 
-                <div className="lp-hero">
-                    <PulseLine />
-                    <h1 className="lp-headline lp-reveal" style={{ animationDelay: "0.15s" }}>
-                        Every rupee your
-                        <br />
-                        cloud burns,
-                        <br />
-                        <span className="lp-headline-accent">accounted for.</span>
-                    </h1>
-                    <div className="lp-mtd lp-reveal" style={{ animationDelay: "0.3s" }}>
-                        <span className="lp-mtd-label">TRACKED THIS MONTH</span>
-                        <span className="lp-mtd-value lp-num">
-                            ₹{Math.round(spend).toLocaleString("en-IN")}
-                        </span>
-                        <span className="lp-mtd-sub">across 5 providers · anomalies flagged in minutes, not invoices</span>
-                    </div>
-                </div>
+        const handleMouseMove = (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
 
-                <div className="lp-panel-grid">
-                    <div className="lp-reveal" style={{ animationDelay: "0.45s" }}>
-                        <LedgerTape />
-                    </div>
-                    <div className="lp-side-col">
-                        <ProviderRail />
-                        <ActivityTicker />
-                    </div>
-                </div>
-            </div>
+            const rotateX = ((y - centerY) / centerY) * -6;
+            const rotateY = ((x - centerX) / centerX) * 6;
 
-            <div className="lp-corner lp-corner--left">XARKA AI TECHNOLOGIES</div>
-        </div>
-    );
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(8px)`;
+            card.style.setProperty("--mouse-x", `${x}px`);
+            card.style.setProperty("--mouse-y", `${y}px`);
+        };
+
+        const handleMouseLeave = () => {
+            card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)`;
+        };
+
+        card.addEventListener("mousemove", handleMouseMove);
+        card.addEventListener("mouseleave", handleMouseLeave);
+
+        return () => {
+            card.removeEventListener("mousemove", handleMouseMove);
+            card.removeEventListener("mouseleave", handleMouseLeave);
+        };
+    }, []);
+
+    return cardRef;
 }
 
-/* ---------------------- right panel ---------------------- */
+/* ---------------------- sign in panel ---------------------- */
 
 function SignInPanel() {
     const { login, enrollStart, enrollConfirm } = useAuth();
+    const cardRef = use3dTilt();
 
     // stage: "email" | "qr" | "code" | "submitting"
     const [stage, setStage] = useState("email");
@@ -454,122 +465,188 @@ function SignInPanel() {
     const stepIndex = stage === "email" || (stage === "submitting" && !qrDataUrl && code === "") ? 0 : stage === "qr" ? 1 : 2;
 
     return (
-        <div className="lp-right">
-            <div className="lp-card lp-reveal" style={{ animationDelay: "0.2s" }}>
-                <div className="lp-card-sheen" aria-hidden="true" />
+        <div className="lp-card lp-reveal" ref={cardRef} style={{ animationDelay: "0.2s" }}>
+            <div className="lp-card-sheen" aria-hidden="true" />
+            <div className="lp-card-spotlight" aria-hidden="true" />
 
-                <div className="lp-card-mark">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-                        <path d="M3 16 8 9l4 4 5-8 4 6" stroke="#0A0D16" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                </div>
-
-                <h2 className="lp-card-title">Sign in to SpendWatch</h2>
-                <p className="lp-card-sub">
-                    {stage === "qr"
-                        ? "Scan this into Microsoft Authenticator to finish setup."
-                        : stepIndex === 2
-                            ? "Enter the 6-digit code from your authenticator app."
-                            : "Enter your authorized Xarka email to continue."}
-                </p>
-
-                <div className="lp-steps" aria-hidden="true">
-                    {["Email", "Verify", "Code"].map((label, i) => (
-                        <div key={label} className={`lp-step ${i <= stepIndex ? "is-active" : ""}`}>
-                            <span className="lp-step-bar" />
-                            <span className="lp-step-label">{label}</span>
-                        </div>
-                    ))}
-                </div>
-
-                {errorMessage && (
-                    <div className="lp-error" role="alert">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3" />
-                            <path d="M7 4v3.5M7 9.5h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                        </svg>
-                        <span>{errorMessage}</span>
-                    </div>
-                )}
-
-                {stage === "email" || (stage === "submitting" && !qrDataUrl && code === "") ? (
-                    <form onSubmit={handleEmailSubmit} className="lp-form" key="email">
-                        <label className="lp-field">
-                            <span className="lp-field-label">Work email</span>
-                            <input
-                                className="lp-input"
-                                type="email"
-                                required
-                                placeholder="you@xarka.in"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                disabled={stage === "submitting"}
-                                autoFocus
-                            />
-                        </label>
-                        <button className="lp-btn" type="submit" disabled={stage === "submitting"}>
-                            <span>{stage === "submitting" ? "Checking…" : "Continue"}</span>
-                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                                <path d="M3 8h9M9 4.5 12.5 8 9 11.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </button>
-                    </form>
-                ) : null}
-
-                {stage === "qr" && (
-                    <div className="lp-qr" key="qr">
-                        <div className="lp-qr-frame">
-                            <img src={qrDataUrl} alt="Scan with Microsoft Authenticator" className="lp-qr-img" />
-                        </div>
-                        <button className="lp-btn" onClick={handleQrContinue}>
-                            <span>I've scanned it — continue</span>
-                        </button>
-                    </div>
-                )}
-
-                {(stage === "code" || (stage === "submitting" && (qrDataUrl || code !== ""))) && (
-                    <form onSubmit={handleCodeSubmit} className="lp-form" key="code">
-                        <label className="lp-field">
-                            <span className="lp-field-label">Authenticator code</span>
-                            <input
-                                className="lp-input lp-input--code lp-num"
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]{6}"
-                                maxLength={6}
-                                required
-                                placeholder="••••••"
-                                value={code}
-                                onChange={(e) => setCode(e.target.value)}
-                                disabled={stage === "submitting"}
-                                autoFocus
-                            />
-                        </label>
-                        <button className="lp-btn" type="submit" disabled={stage === "submitting"}>
-                            <span>{stage === "submitting" ? "Verifying…" : "Sign in"}</span>
-                        </button>
-                    </form>
-                )}
-
-                <div className="lp-footnote">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                        <path d="M6 1 10 3v3c0 2.6-1.7 4.3-4 5-2.3-.7-4-2.4-4-5V3l4-2Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
-                    </svg>
-                    Restricted to Xarka's authorized user list · MFA enforced
-                </div>
+            <div className="lp-card-mark">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+                    <path d="M3 16 8 9l4 4 5-8 4 6" stroke="#0A0D16" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
             </div>
 
-            <div className="lp-corner lp-corner--right">SPENDWATCH · INTERNAL</div>
+            <h2 className="lp-card-title">Sign in to SpendWatch</h2>
+            <p className="lp-card-sub">
+                {stage === "qr"
+                    ? "Scan this into Microsoft Authenticator to finish setup."
+                    : stepIndex === 2
+                        ? "Enter the 6-digit code from your authenticator app."
+                        : "Enter your authorized work email to continue."}
+            </p>
+
+            <div className="lp-steps" aria-hidden="true">
+                {["Email", "Verify", "Code"].map((label, i) => (
+                    <div key={label} className={`lp-step ${i <= stepIndex ? "is-active" : ""}`}>
+                        <span className="lp-step-bar" />
+                        <span className="lp-step-label">{label}</span>
+                    </div>
+                ))}
+            </div>
+
+            {errorMessage && (
+                <div className="lp-error" role="alert">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3" />
+                        <path d="M7 4v3.5M7 9.5h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                    <span>{errorMessage}</span>
+                </div>
+            )}
+
+            {stage === "email" || (stage === "submitting" && !qrDataUrl && code === "") ? (
+                <form onSubmit={handleEmailSubmit} className="lp-form" key="email">
+                    <label className="lp-field">
+                        <span className="lp-field-label">Work email</span>
+                        <input
+                            className="lp-input"
+                            type="email"
+                            required
+                            placeholder="you@xarka.in"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            disabled={stage === "submitting"}
+                            autoFocus
+                        />
+                    </label>
+                    <button className="lp-btn" type="submit" disabled={stage === "submitting"}>
+                        <span>{stage === "submitting" ? "Checking…" : "Continue"}</span>
+                        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M3 8h9M9 4.5 12.5 8 9 11.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
+                </form>
+            ) : null}
+
+            {stage === "qr" && (
+                <div className="lp-qr" key="qr">
+                    <div className="lp-qr-frame">
+                        <img src={qrDataUrl} alt="Scan with Microsoft Authenticator" className="lp-qr-img" />
+                    </div>
+                    <button className="lp-btn" onClick={handleQrContinue}>
+                        <span>I've scanned it — continue</span>
+                    </button>
+                </div>
+            )}
+
+            {(stage === "code" || (stage === "submitting" && (qrDataUrl || code !== ""))) && (
+                <form onSubmit={handleCodeSubmit} className="lp-form" key="code">
+                    <label className="lp-field">
+                        <span className="lp-field-label">Authenticator code</span>
+                        <input
+                            className="lp-input lp-input--code lp-num"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                            required
+                            placeholder="••••••"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
+                            disabled={stage === "submitting"}
+                            autoFocus
+                        />
+                    </label>
+                    <button className="lp-btn" type="submit" disabled={stage === "submitting"}>
+                        <span>{stage === "submitting" ? "Verifying…" : "Sign in"}</span>
+                    </button>
+                </form>
+            )}
+
+            <div className="lp-footnote">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M6 1 10 3v3c0 2.6-1.7 4.3-4 5-2.3-.7-4-2.4-4-5V3l4-2Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+                </svg>
+                Restricted access · MFA enforced
+            </div>
         </div>
     );
 }
+
+/* ---------------------- main layout ---------------------- */
 
 export default function LoginPage() {
     return (
         <div className="lp-screen">
             <AuroraBackdrop />
-            <MarketingPanel />
-            <SignInPanel />
+
+            <div className="lp-container">
+                {/* Header Navbar */}
+                <header className="lp-header lp-reveal" style={{ animationDelay: "0.05s" }}>
+                    <div className="lp-brand-row">
+                        <div className="lp-mark">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+                                <path d="M3 16 8 9l4 4 5-8 4 6" stroke="#0A0D16" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </div>
+                        <div className="lp-brand-text">
+                            <span className="lp-brand-name">SpendWatch</span>
+                            <span className="lp-brand-sub">CLOUD COST INTELLIGENCE</span>
+                        </div>
+                    </div>
+                    <div className="lp-header-badge">
+                        <span className="lp-live-pulse" />
+                        <span>ENTERPRISE LEDGER LIVE</span>
+                    </div>
+                </header>
+
+                {/* Hero Headline Section */}
+                <div className="lp-hero-center">
+                    <PulseLine />
+                    <h1 className="lp-headline lp-reveal" style={{ animationDelay: "0.15s" }}>
+                        Every rupee your cloud burns,
+                        <br />
+                        <span className="lp-headline-accent">accounted for.</span>
+                    </h1>
+                    
+                    <div className="lp-mtd lp-reveal" style={{ animationDelay: "0.25s" }}>
+                        <div className="lp-mtd-value-wrapper">
+                            <span className="lp-mtd-label">TOTAL MONTHLY SPEND</span>
+                            <span className="lp-mtd-value lp-blur-val">₹••,•••</span>
+                            <span className="lp-protected-pill">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                Sign in to view live spend
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Unified Main Content Grid */}
+                <div className="lp-main-grid">
+                    {/* Left Feature Column */}
+                    <div className="lp-feature-col lp-reveal" style={{ animationDelay: "0.35s" }}>
+                        <LedgerTape />
+                        <div className="lp-side-col">
+                            <ProviderRail />
+                            <ActivityTicker />
+                        </div>
+                    </div>
+
+                    {/* Right Auth Card Column */}
+                    <div className="lp-auth-col">
+                        <SignInPanel />
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <footer className="lp-footer lp-reveal" style={{ animationDelay: "0.45s" }}>
+                    <span>SPENDWATCH ENTERPRISE · SECURE AUTHENTICATION</span>
+                    <span className="lp-footer-dot">•</span>
+                    <span>AWS · RUNPOD · GOOGLE ADS · MS 365 · E2E NETWORKS</span>
+                </footer>
+            </div>
         </div>
     );
 }

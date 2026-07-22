@@ -1,10 +1,10 @@
 """
-Shared USD exchange-rate helper. Any provider that bills natively in a
-non-USD currency (Google Ads for INR accounts, Microsoft 365, E2E
-Networks) should convert to USD at the point of ingestion using this,
-so every number stored/returned by the backend is in USD — the frontend
-then converts USD -> INR for display via CurrencyContext when the user
-toggles the header currency switch.
+Shared currency / exchange-rate helper.
+All five providers return monetary values in INR.  Providers that bill in
+USD (AWS, RunPod) use `to_inr()` to convert at fetch time; providers that
+bill in a non-USD native currency (Google Ads) use `to_inr_from_currency()`
+for a direct conversion.  E2E Networks and Microsoft 365 bill natively in
+INR and need no conversion.
 """
 from __future__ import annotations
 
